@@ -1,0 +1,432 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>장원급제 사자성어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Noto+Serif+KR:wght@600;700&display=swap">
+<style>
+/* 단청 색을 쓴 밝은 한 가지 테마(아이용 게임 화면). 세로 한 줄 흐름, 아이패드 세로 화면 기준 */
+:root {
+  --paper: #F2F7F5;
+  --card: #FFFFFF;
+  --ink: #1B2430;
+  --ink-soft: #56606E;
+  --line: #D6E2DE;
+  --cheong: #13806F;
+  --cheong-deep: #0B5A4F;
+  --cheong-1: #CFEDE6;
+  --cheong-2: #7FCDBC;
+  --ju: #D63C2A;
+  --ju-soft: #FBE2DC;
+  --hwang: #E9A20C;
+  --hwang-deep: #9A6600;
+  --hwang-soft: #FDF0CF;
+  --nam: #25366E;
+  --grey: #E3E8E7;
+  --grey-ink: #7D8785;
+  --white: #FFFFFF;
+  --font-display: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "Gowun Dodum", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-hanja: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { background: var(--paper); }
+body { margin: 0; color: var(--ink); font-family: var(--font-body); font-size: 17px; line-height: 1.6; }
+button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid var(--nam); outline-offset: 2px; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+
+.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 56px; }
+.view { display: grid; gap: 18px; }
+.eyebrow { font-family: var(--font-display); color: var(--cheong); font-size: 1.05rem; }
+.top-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.quiet-btn { background: transparent; border: 2px solid var(--line); border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; color: var(--ink-soft); }
+
+/* 처음 화면 */
+.intro { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 28px 22px; display: grid; gap: 14px; }
+.intro h1 { font-size: 2rem; line-height: 1.25; }
+.intro label { font-family: var(--font-display); font-size: 1.1rem; }
+.big-input { width: 100%; min-width: 0; font-family: var(--font-display); font-size: 1.7rem; letter-spacing: 0.08em; padding: 10px 16px; border: 3px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); }
+.big-input:focus-visible { outline: none; border-color: var(--cheong); }
+
+/* 홈 */
+.hello { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.avatar { flex: none; width: 56px; height: 56px; border-radius: 50%; background: var(--cheong); color: var(--white); display: grid; place-items: center; font-family: var(--font-display); font-size: 1.6rem; }
+.name { font-family: var(--font-display); font-size: 1.5rem; line-height: 1.2; overflow-wrap: anywhere; }
+.rank-line { color: var(--ink-soft); display: flex; align-items: center; gap: 8px; }
+.rank-badge { font-family: var(--font-display); background: var(--hwang-soft); color: var(--hwang-deep); border: 2px solid var(--hwang); border-radius: 8px; padding: 0 10px; }
+.sound-btn { background: var(--card); border: 2px solid var(--line); border-radius: 999px; padding: 6px 16px; font-size: 0.95rem; }
+.sound-btn[aria-pressed="false"] { color: var(--grey-ink); }
+.ranks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.ranks span { text-align: center; font-family: var(--font-display); font-size: 0.95rem; padding: 6px 2px; border-radius: 8px; background: var(--grey); color: var(--grey-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ranks span.done { background: var(--cheong-1); color: var(--cheong-deep); }
+.ranks span.now { background: var(--hwang); color: var(--white); transform: scale(1.06); }
+.rank-next { color: var(--ink-soft); font-size: 0.95rem; margin-top: -8px; }
+.rank-next b { color: var(--ink); font-weight: 400; font-family: var(--font-display); }
+.warn { background: var(--ju-soft); color: var(--ju); border-radius: 12px; padding: 10px 14px; }
+
+.start {
+  width: 100%; border: 0; border-radius: 18px; padding: 20px 16px;
+  background: var(--cheong); color: var(--white);
+  font-family: var(--font-display); font-size: 1.7rem; line-height: 1.25;
+  display: grid; gap: 4px; box-shadow: 0 6px 0 var(--cheong-deep);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.start small { font-family: var(--font-body); font-size: 1rem; opacity: 0.92; }
+.start:active { transform: translateY(5px); box-shadow: 0 1px 0 var(--cheong-deep); }
+.done-banner { border-radius: 18px; padding: 18px 16px; background: var(--cheong-1); color: var(--cheong-deep); text-align: center; display: grid; gap: 4px; }
+.done-banner b { font-family: var(--font-display); font-weight: 400; font-size: 1.6rem; }
+.sub-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.sub-btn { flex: 1 1 200px; background: var(--card); border: 2px solid var(--line); border-radius: 14px; padding: 12px 16px; font-family: var(--font-display); font-size: 1.15rem; color: var(--cheong-deep); }
+
+.panel { background: var(--card); border: 2px solid var(--line); border-radius: 18px; padding: 18px; display: grid; gap: 12px; min-width: 0; }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.panel-head h2 { font-size: 1.35rem; }
+.panel-head span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.board { display: grid; gap: 14px; }
+.week { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); align-items: center; gap: 8px; }
+.wk { font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
+.cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.cell {
+  aspect-ratio: 1; max-width: 100%; border-radius: 12px; border: 2px dashed var(--line);
+  display: grid; place-items: center; position: relative; background: var(--paper);
+  font-size: 0.8rem; color: var(--grey-ink); font-variant-numeric: tabular-nums; padding: 0;
+}
+.cell .stk { font-size: clamp(1.4rem, 5vw, 2.2rem); line-height: 1; }
+.cell.filled { border-style: solid; border-color: var(--cheong-1); background: var(--white); }
+.cell.chest { border: 3px solid var(--hwang); background: var(--hwang-soft); }
+.cell.final { border: 3px solid var(--ju); background: var(--ju-soft); }
+.cell.locked .stk { filter: grayscale(0.85); opacity: 0.6; }
+.cell.today { border: 3px solid var(--cheong); color: var(--cheong); font-family: var(--font-display); font-size: 0.95rem; animation: pulse 1.6s ease-in-out infinite; }
+.cell.ready { animation: glow 1.4s ease-in-out infinite; }
+.cell .tag { position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-display); font-size: 0.7rem; color: var(--white); background: var(--hwang); border-radius: 6px; padding: 0 5px; line-height: 1.5; }
+.cell.final .tag { background: var(--ju); }
+.cell.just-stuck .stk { animation: stick 0.6s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(19,128,111,0.35); } 50% { box-shadow: 0 0 0 6px rgba(19,128,111,0); } }
+@keyframes glow { 0%,100% { box-shadow: 0 0 0 0 rgba(233,162,12,0.5); } 50% { box-shadow: 0 0 0 7px rgba(233,162,12,0); } }
+@keyframes stick { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 100% { transform: scale(1) rotate(var(--r, 0deg)); opacity: 1; } }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; }
+.tile { border-radius: 8px; padding: 6px 2px 4px; text-align: center; font-size: 0.8rem; line-height: 1.3; border: 2px solid transparent; overflow-wrap: anywhere; }
+.tile .st { display: block; font-size: 0.7rem; letter-spacing: 0.05em; }
+.tile.s0 { background: var(--grey); color: var(--grey-ink); }
+.tile.s1 { background: var(--cheong-1); color: var(--cheong-deep); }
+.tile.s2 { background: var(--cheong-2); color: var(--cheong-deep); }
+.tile.s3 { background: var(--cheong); color: var(--white); border-color: var(--hwang); }
+.tile.lock { background: transparent; border: 2px dashed var(--line); color: var(--grey-ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--ink-soft); }
+.legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 4px; }
+.link-btn { justify-self: center; background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font-size: 0.95rem; padding: 8px; }
+
+/* 카드 */
+.flip { perspective: 1200px; }
+.flip-inner { display: grid; transition: transform 0.7s cubic-bezier(.3,1.3,.5,1); transform-style: preserve-3d; }
+.flip-inner.flipped { transform: rotateY(180deg); }
+.flip-inner.instant { transition: none; }
+.face { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 22px; min-width: 0; }
+.face.front {
+  border: 0; background: var(--nam); color: var(--white); display: grid; place-content: center; gap: 8px; text-align: center;
+  font-family: var(--font-display); font-size: 2.4rem; min-height: 320px;
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.05) 0 12px, transparent 12px 24px);
+}
+.face.front small { font-family: var(--font-body); font-size: 1.05rem; opacity: 0.85; }
+.face.back { transform: rotateY(180deg); background: var(--card); border: 3px solid var(--line); padding: 22px; display: grid; gap: 14px; align-content: start; }
+.sc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sc-group { font-size: 0.9rem; background: var(--cheong-1); color: var(--cheong-deep); border-radius: 6px; padding: 1px 8px; }
+.sc-stars { color: var(--hwang); letter-spacing: 0.15em; }
+.sc-word { font-family: var(--font-display); font-size: 2.8rem; line-height: 1.1; letter-spacing: 0.08em; }
+.sc-hanja { font-family: var(--font-hanja); font-weight: 700; font-size: 1.6rem; color: var(--ink-soft); letter-spacing: 0.25em; margin-top: 2px; }
+.sc-chars { display: grid; gap: 6px; margin: 0; }
+.sc-chars div { background: var(--paper); border-radius: 10px; padding: 8px 4px; text-align: center; min-width: 0; }
+.sc-chars dt { font-family: var(--font-hanja); font-weight: 700; font-size: 1.6rem; line-height: 1.2; }
+.sc-chars dd { margin: 0; font-size: 0.85rem; color: var(--ink-soft); overflow-wrap: anywhere; }
+.sc-mean { font-family: var(--font-display); font-size: 1.35rem; line-height: 1.4; color: var(--cheong-deep); background: var(--cheong-1); border-radius: 12px; padding: 10px 14px; }
+.sc-row { display: grid; gap: 2px; }
+.sc-row b { font-family: var(--font-display); font-weight: 400; color: var(--ink-soft); font-size: 0.95rem; }
+.sc-tip { background: var(--hwang-soft); border-radius: 12px; padding: 10px 14px; }
+.sc-tip b { color: var(--hwang-deep); }
+.sc-warn { background: var(--ju-soft); border-radius: 12px; padding: 10px 14px; }
+.sc-warn b { color: var(--ju); }
+.go-btn { border: 0; border-radius: 14px; padding: 14px 18px; background: var(--cheong); color: var(--white); font-family: var(--font-display); font-size: 1.3rem; box-shadow: 0 5px 0 var(--cheong-deep); }
+.go-btn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--cheong-deep); }
+
+/* 문제 */
+.q-count { font-family: var(--font-display); color: var(--ink-soft); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.progress { height: 10px; border-radius: 999px; background: var(--grey); overflow: hidden; margin-top: -8px; }
+.progress span { display: block; height: 100%; width: 0; background: var(--cheong); border-radius: 999px; transition: width 0.35s ease; }
+.combo { font-family: var(--font-display); color: var(--white); background: var(--ju); border-radius: 999px; padding: 2px 14px; font-size: 1.15rem; }
+.combo.pop { animation: pop 0.45s cubic-bezier(.2,1.8,.4,1); }
+@keyframes pop { 0% { transform: scale(0.4); } 100% { transform: scale(1); } }
+.q-card { position: relative; background: var(--card); border: 3px solid var(--line); border-radius: 22px; padding: 22px; display: grid; gap: 14px; overflow: hidden; min-width: 0; }
+.q-card.shake { animation: shake 0.45s; }
+.q-card.thud { animation: thud 0.3s; }
+@keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-10px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(4px); } }
+@keyframes thud { 0% { transform: scale(1); } 40% { transform: scale(0.985) translateY(3px); } 100% { transform: scale(1); } }
+.q-type { justify-self: start; font-size: 0.9rem; background: var(--paper); border-radius: 6px; padding: 1px 10px; color: var(--ink-soft); }
+.q-text { font-family: var(--font-display); font-size: 1.6rem; line-height: 1.4; padding-right: 8px; }
+.q-text.big { font-size: 2.6rem; letter-spacing: 0.08em; }
+.q-help { color: var(--ink-soft); margin-top: -6px; }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.choice { text-align: left; background: var(--paper); border: 3px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: 1.1rem; line-height: 1.45; min-height: 64px; }
+.choice.word { font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0.06em; text-align: center; }
+.choice.right { background: var(--cheong-1); border-color: var(--cheong); color: var(--cheong-deep); }
+.choice.wrong { background: var(--ju-soft); border-color: var(--ju); color: var(--ju); }
+.choice:disabled { cursor: default; opacity: 1; }
+.write-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.write-row input { flex: 1 1 220px; min-width: 0; font-family: var(--font-display); font-size: 1.9rem; letter-spacing: 0.15em; padding: 10px 16px; border: 3px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); }
+.write-row input:focus-visible { outline: none; border-color: var(--cheong); }
+.write-row button { border: 0; border-radius: 14px; padding: 0 22px; min-height: 60px; background: var(--cheong); color: var(--white); font-family: var(--font-display); font-size: 1.3rem; }
+.err { color: var(--ju); font-size: 0.95rem; min-height: 1.5em; }
+.feedback { font-size: 1.05rem; border-radius: 12px; padding: 10px 14px; white-space: pre-line; }
+.feedback.ok { background: var(--cheong-1); color: var(--cheong-deep); }
+.feedback.no { background: var(--ju-soft); color: var(--ju); }
+.star-gain { font-family: var(--font-display); color: var(--hwang-deep); background: var(--hwang-soft); border-radius: 8px; padding: 0 8px; margin-right: 6px; }
+.stamp {
+  position: absolute; top: 12px; right: 12px; width: 124px; height: 124px; border-radius: 50%;
+  border: 6px double var(--ju); color: var(--ju); display: grid; place-content: center; text-align: center;
+  font-family: var(--font-display); font-size: 1.4rem; line-height: 1.15; background: rgba(255,255,255,0.8);
+  transform: rotate(-14deg); pointer-events: none;
+}
+.stamp.gold { border-color: var(--hwang); color: var(--hwang-deep); background: rgba(253,240,207,0.92); }
+.stamp .hj { font-family: var(--font-hanja); font-weight: 700; font-size: 2rem; line-height: 1; }
+.stamp.land { animation: stamp 0.42s cubic-bezier(.25,.1,.3,1.4) both; }
+@keyframes stamp { 0% { transform: scale(2.8) rotate(-14deg); opacity: 0; } 65% { transform: scale(0.9) rotate(-14deg); opacity: 1; } 100% { transform: scale(1) rotate(-14deg); opacity: 1; } }
+.result { background: var(--card); border: 3px solid var(--hwang); border-radius: 22px; padding: 26px 22px; display: grid; gap: 12px; text-align: center; justify-items: center; }
+.result h2 { font-size: 2rem; }
+.result .score { font-family: var(--font-display); font-size: 3rem; color: var(--cheong); line-height: 1; font-variant-numeric: tabular-nums; }
+.result .gain { font-size: 1.1rem; color: var(--hwang-deep); background: var(--hwang-soft); border-radius: 999px; padding: 4px 16px; }
+.result .note { color: var(--ink-soft); }
+
+/* 스티커 */
+.stickers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stickers button { aspect-ratio: 1; max-width: 100%; border-radius: 18px; background: var(--card); border: 3px solid var(--line); font-size: clamp(2.2rem, 8vw, 3.4rem); line-height: 1; transition: transform 0.15s; }
+.stickers button[aria-pressed="true"] { border-color: var(--cheong); background: var(--cheong-1); transform: scale(1.08) rotate(-4deg); }
+
+/* 보물상자 · 홍패 */
+.stage { position: relative; overflow: hidden; border-radius: 22px; padding: 28px 20px; display: grid; justify-items: center; gap: 14px; text-align: center; min-height: 380px; align-content: center; }
+.chest-stage { background: var(--nam); color: var(--white); }
+.chest-stage h2 { font-size: 1.8rem; }
+.chest-btn { border: 0; background: transparent; font-size: 7rem; line-height: 1; padding: 0; }
+.chest-btn.wiggle { animation: wiggle 0.9s ease-in-out; }
+@keyframes wiggle { 0%,100% { transform: rotate(0); } 15% { transform: rotate(-12deg) scale(1.05); } 30% { transform: rotate(10deg) scale(1.1); } 45% { transform: rotate(-8deg) scale(1.15); } 60% { transform: rotate(6deg) scale(1.2); } 80% { transform: scale(1.35); } }
+.coupon { background: var(--white); color: var(--ink); border-radius: 18px; border: 3px dashed var(--hwang); padding: 20px 22px; display: grid; gap: 6px; max-width: 420px; width: 100%; animation: pop 0.5s cubic-bezier(.2,1.6,.4,1); }
+.coupon .k { font-family: var(--font-display); color: var(--hwang-deep); font-size: 1.05rem; }
+.coupon .v { font-family: var(--font-display); font-size: 1.8rem; line-height: 1.3; overflow-wrap: anywhere; }
+.coupon .n { color: var(--ink-soft); font-size: 0.9rem; }
+.confetti { position: absolute; top: -20px; width: 10px; height: 16px; border-radius: 2px; animation: fall 1.8s ease-in forwards; pointer-events: none; }
+@keyframes fall { to { transform: translateY(460px) rotate(540deg); opacity: 0.2; } }
+.hong-stage { background: var(--hwang-soft); }
+.hongpae { background: var(--ju); color: var(--white); border-radius: 12px; padding: 26px 22px; display: grid; gap: 8px; text-align: center; border: 6px double var(--hwang-soft); outline: 3px solid var(--ju); max-width: 420px; width: 100%; }
+.hongpae .hj { font-family: var(--font-hanja); font-weight: 700; font-size: 2.4rem; letter-spacing: 0.3em; }
+.hongpae .t { font-family: var(--font-display); font-size: 1.5rem; }
+.hongpae .nm { font-family: var(--font-display); font-size: 2.4rem; line-height: 1.2; overflow-wrap: anywhere; }
+
+/* 부모님 메뉴 */
+.field-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.field-row input { flex: 1 1 180px; min-width: 0; font: inherit; font-size: 1.1rem; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.code-box { width: 100%; min-height: 96px; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; line-height: 1.4; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); word-break: break-all; resize: vertical; }
+.plain-btn { background: var(--card); border: 2px solid var(--line); border-radius: 12px; padding: 10px 16px; font-family: var(--font-display); font-size: 1.05rem; color: var(--cheong-deep); }
+.plain-btn.danger { border-color: var(--ju); color: var(--ju); }
+.msg { font-size: 0.95rem; color: var(--ink-soft); min-height: 1.4em; }
+.msg.ok { color: var(--cheong-deep); }
+.msg.bad { color: var(--ju); }
+.confirm { background: var(--hwang-soft); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
+.confirm .field-row { justify-content: flex-start; }
+.help { color: var(--ink-soft); font-size: 0.95rem; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--ink); color: var(--white); border-radius: 14px; padding: 12px 18px; max-width: calc(100% - 32px); width: max-content; text-align: center; animation: pop 0.35s; }
+
+@media (max-width: 480px) {
+  .ranks span { font-size: 0.8rem; }
+  .q-text { font-size: 1.35rem; }
+  .q-text.big, .sc-word { font-size: 2.2rem; }
+  .stamp { width: 100px; height: 100px; font-size: 1.1rem; }
+  .stamp .hj { font-size: 1.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition: none !important; }
+}
+</style>
+
+<main class="wrap">
+
+  <section class="view" id="v-name" aria-label="이름 입력" hidden>
+    <div class="intro">
+      <p class="eyebrow">장원급제 사자성어</p>
+      <h1>서당에 온 걸 환영해요!</h1>
+      <p>3주 동안 사자성어 43개를 익히고 장원급제에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <label for="nameInput">이름</label>
+      <input class="big-input" id="nameInput" type="text" maxlength="8" lang="ko" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
+      <p class="err" id="nameErr" aria-live="polite"></p>
+      <button class="go-btn" id="nameBtn" type="button">시작하기</button>
+    </div>
+  </section>
+
+  <section class="view" id="v-home" aria-label="홈" hidden>
+    <div class="hello">
+      <div class="who">
+        <div class="avatar" id="avatar" aria-hidden="true"></div>
+        <div>
+          <p class="name" id="hName"></p>
+          <p class="rank-line"><span class="rank-badge" id="rankBadge"></span><span id="starCount"></span></p>
+        </div>
+      </div>
+      <button class="sound-btn" id="soundBtn" type="button" aria-pressed="true">소리 켬</button>
+    </div>
+    <div class="ranks" id="ranks" aria-label="칭호 단계"></div>
+    <p class="rank-next" id="rankNext"></p>
+    <p class="warn" id="storageWarn" hidden>이 아이패드에 기록이 저장되지 않고 있어요. 개인정보 보호 브라우징(검은 주소창)을 끄고 다시 열어 주세요.</p>
+    <button class="start" id="startBtn" type="button"><span id="startMain">오늘의 공부 시작</span><small id="startSub"></small></button>
+    <div class="done-banner" id="doneBanner" hidden><b id="doneMain"></b><span id="doneSub"></span></div>
+    <div class="sub-actions">
+      <button class="sub-btn" id="practiceBtn" type="button">연습 문제 10개</button>
+      <button class="sub-btn" id="examPracticeBtn" type="button">과거 시험 연습 20문제</button>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>스티커판</h2><span id="boardCount"></span></div>
+      <div class="board" id="board"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-head"><h2>사자성어 도감</h2><span id="dogamCount"></span></div>
+      <div class="tiles" id="tiles"></div>
+      <p class="legend">
+        <span><i style="background:var(--grey)"></i>얻음</span>
+        <span><i style="background:var(--cheong-1)"></i>별 1</span>
+        <span><i style="background:var(--cheong-2)"></i>별 2</span>
+        <span><i style="background:var(--cheong); outline:2px solid var(--hwang)"></i>별 3 (외움)</span>
+        <span><i style="border:2px dashed var(--line)"></i>아직 못 얻음</span>
+      </p>
+    </div>
+    <button class="link-btn" id="parentLink" type="button">부모님 메뉴</button>
+  </section>
+
+  <section class="view" id="v-card" aria-label="카드" hidden>
+    <div class="top-row">
+      <p class="eyebrow" id="cardEyebrow"></p>
+      <button class="quiet-btn" type="button" data-go="home">홈으로</button>
+    </div>
+    <div class="flip">
+      <div class="flip-inner" id="flipInner">
+        <button class="face front" id="flipFront" type="button">새 카드!<small>눌러서 뒤집기</small></button>
+        <article class="face back" id="cardBack"></article>
+      </div>
+    </div>
+    <button class="go-btn" id="cardNext" type="button" hidden>다음</button>
+  </section>
+
+  <section class="view" id="v-quiz" aria-label="문제" hidden>
+    <div class="top-row">
+      <span class="q-count" id="qCount"></span>
+      <span class="combo" id="combo" hidden></span>
+      <button class="quiet-btn" type="button" data-go="home">그만하기</button>
+    </div>
+    <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+    <div class="q-card" id="qCard">
+      <span class="q-type" id="qType"></span>
+      <p class="q-text" id="qText"></p>
+      <p class="q-help" id="qHelp"></p>
+      <div id="qBody"></div>
+      <p class="feedback" id="feedback" aria-live="polite" hidden></p>
+      <div class="stamp" id="stamp" aria-hidden="true" hidden></div>
+    </div>
+    <button class="go-btn" id="nextBtn" type="button" hidden>다음 문제</button>
+    <div class="result" id="result" hidden>
+      <h2 id="resultTitle"></h2>
+      <p class="score" id="score"></p>
+      <p class="gain" id="resultGain"></p>
+      <p class="note" id="resultNote"></p>
+      <button class="go-btn" id="resultBtn" type="button"></button>
+    </div>
+  </section>
+
+  <section class="view" id="v-sticker" aria-label="스티커 고르기" hidden>
+    <h1 style="font-size:1.9rem">오늘 붙일 스티커를 골라요</h1>
+    <p class="help" id="stickerSub"></p>
+    <div class="stickers" id="stickers"></div>
+    <p class="err" id="stickerErr" aria-live="polite"></p>
+    <button class="go-btn" id="stickBtn" type="button">붙이기</button>
+  </section>
+
+  <section class="view" id="v-chest" aria-label="보물상자" hidden>
+    <div class="stage chest-stage" id="chestStage">
+      <h2 id="chestTitle"></h2>
+      <button class="chest-btn" id="chestBtn" type="button" aria-label="보물상자 열기">🎁</button>
+      <div id="couponSlot" style="display:contents"></div>
+      <p id="chestHint"></p>
+    </div>
+    <button class="go-btn" id="chestHome" type="button" data-go="home" hidden>홈으로</button>
+  </section>
+
+  <section class="view" id="v-hong" aria-label="홍패" hidden>
+    <div class="stage hong-stage" id="hongStage">
+      <div class="hongpae">
+        <p class="hj">紅牌</p>
+        <p class="t" id="hongTitle"></p>
+        <p class="nm" id="hongName"></p>
+        <p id="hongScore"></p>
+        <p id="hongDate"></p>
+      </div>
+      <p>21일 동안 정말 수고했어요!</p>
+    </div>
+    <button class="go-btn" type="button" data-go="home">홈으로</button>
+  </section>
+
+  <section class="view" id="v-parent" aria-label="부모님 메뉴" hidden>
+    <div class="top-row">
+      <h1 style="font-size:1.8rem">부모님 메뉴</h1>
+      <button class="quiet-btn" type="button" data-go="home">홈으로</button>
+    </div>
+    <div class="panel">
+      <h2>이름 바꾸기</h2>
+      <div class="field-row">
+        <input id="pName" type="text" maxlength="8" lang="ko" autocomplete="off" aria-label="이름">
+        <button class="plain-btn" id="pNameBtn" type="button">바꾸기</button>
+      </div>
+      <p class="msg" id="pNameMsg" aria-live="polite"></p>
+    </div>
+    <div class="panel">
+      <h2>소리 확인</h2>
+      <p class="help">누르면 효과음이 나요. 안 들리면 아이패드 볼륨을 올려 보고, 그래도 안 들리면 아래에 나오는 문구를 Claude에게 알려 주세요.</p>
+      <button class="plain-btn" id="pSoundBtn" type="button" style="justify-self:start">소리 확인</button>
+      <p class="msg" id="pSoundMsg" aria-live="polite"></p>
+    </div>
+    <div class="panel">
+      <h2>기록 백업</h2>
+      <p class="help">Safari 방문 기록을 지우면 스티커와 별이 사라질 수 있어요. 아래 코드를 복사해서 부모님 휴대폰 메모나 메시지에 붙여 두세요.</p>
+      <textarea class="code-box" id="pCode" readonly aria-label="백업 코드"></textarea>
+      <button class="plain-btn" id="pCopyBtn" type="button" style="justify-self:start">코드 복사</button>
+      <p class="msg" id="pCopyMsg" aria-live="polite"></p>
+    </div>
+    <div class="panel">
+      <h2>기록 되살리기</h2>
+      <p class="help">백업해 둔 코드를 붙여 넣으면 그때 기록으로 돌아가요.</p>
+      <textarea class="code-box" id="pRestore" aria-label="되살릴 백업 코드" placeholder="JW1.로 시작하는 코드"></textarea>
+      <button class="plain-btn" id="pRestoreBtn" type="button" style="justify-self:start">코드 확인</button>
+      <p class="msg" id="pRestoreMsg" aria-live="polite"></p>
+      <div class="confirm" id="pRestoreConfirm" hidden>
+        <p id="pRestoreInfo"></p>
+        <div class="field-row">
+          <button class="plain-btn" id="pRestoreYes" type="button">이 기록으로 바꾸기</button>
+          <button class="plain-btn" id="pRestoreNo" type="button">그만두기</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>기록 지우기</h2>
+      <p class="help">이 아이패드의 이름, 카드, 별, 스티커가 모두 지워져요. 지우려면 아래 칸에 “지우기”라고 써 주세요.</p>
+      <div class="field-row">
+        <input id="pReset" type="text" lang="ko" autocomplete="off" aria-label="지우기 확인">
+        <button class="plain-btn danger" id="pResetBtn" type="button">기록 지우기</button>
+      </div>
+      <p class="msg" id="pResetMsg" aria-live="polite"></p>
+    </div>
+  </section>
+
+</main>
+
+<script src="data.js"></script>
+<script src="logic.js"></script>
+<script src="ui.js"></script>
+</body></html>
