@@ -248,25 +248,30 @@
     { id: 7, name: '세상의 이치', ids: [2, 29, 43, 32, 9, 10] }
   ];
 
-  // 별 합계 기준 (최대 43 × 3 = 129)
+  // 6일 계획: 날마다 새로 얻는 묶음 번호. 5일째는 전체 복습, 6일째는 과거 시험
+  var PLAN = [[1, 2], [3, 4], [5, 6], [7], [], []];
+
+  // 대회 날 (홈 화면의 D-day)
+  var EXAM_DATE = '2026-10-13';
+
+  // 별 합계 기준. 6일 동안 다 맞히면 5일째에 112개쯤 모인다
   var RANKS = [
     { name: '학동', min: 0 },
-    { name: '유생', min: 20 },
-    { name: '선비', min: 50 },
-    { name: '진사', min: 80 },
-    { name: '급제', min: 110 },
-    { name: '장원', min: 129 }
+    { name: '유생', min: 15 },
+    { name: '선비', min: 35 },
+    { name: '진사', min: 60 },
+    { name: '급제', min: 85 },
+    { name: '장원', min: 105 }
   ];
 
   var STICKERS = ['🐯', '🦊', '🐼', '🐉', '🌸', '🍀', '🌕', '🍡'];
 
-  // 보물상자 쿠폰에 나오는 보상 (부모님이 정함)
+  // 공부한 날 수별 보상 (부모님이 정함). 마지막 날 보상은 홍패와 함께 나온다
   var REWARDS = {
-    7: '용돈 5천 원',
-    14: '외식'
+    6: '용돈 5천 원'
   };
 
-  var DATA = { CARDS: CARDS, GROUPS: GROUPS, RANKS: RANKS, STICKERS: STICKERS, REWARDS: REWARDS };
+  var DATA = { CARDS: CARDS, GROUPS: GROUPS, PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, REWARDS: REWARDS };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);

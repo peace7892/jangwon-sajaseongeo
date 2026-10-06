@@ -85,10 +85,12 @@ p { margin: 0; }
 .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .panel-head h2 { font-size: 1.35rem; }
 .panel-head span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.board { display: grid; gap: 14px; }
-.week { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); align-items: center; gap: 8px; }
-.wk { font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
-.cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.board { display: grid; gap: 14px; padding-bottom: 6px; }
+.cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.dday { justify-self: start; font-family: var(--font-display); font-size: 1.05rem; color: var(--white); background: var(--ju); border-radius: 999px; padding: 2px 14px; margin-top: -6px; }
+.warn { display: grid; gap: 8px; }
+.warn .plain-btn { justify-self: start; }
+#hongCoupon { animation: none; }
 .cell {
   aspect-ratio: 1; max-width: 100%; border-radius: 12px; border: 2px dashed var(--line);
   display: grid; place-items: center; position: relative; background: var(--paper);
@@ -256,7 +258,11 @@ p { margin: 0; }
     <div class="intro">
       <p class="eyebrow">장원급제 사자성어</p>
       <h1>서당에 온 걸 환영해요!</h1>
-      <p>3주 동안 사자성어 43개를 익히고 장원급제에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <p>6일 동안 사자성어 43개를 익히고 장원급제에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <div class="warn" id="nameInAppWarn" hidden>
+        <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열어 주세요.</p>
+        <button class="plain-btn open-safari" type="button" hidden>Safari로 열기</button>
+      </div>
       <label for="nameInput">이름</label>
       <input class="big-input" id="nameInput" type="text" maxlength="8" lang="ko" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done">
       <p class="err" id="nameErr" aria-live="polite"></p>
@@ -275,9 +281,14 @@ p { margin: 0; }
       </div>
       <button class="sound-btn" id="soundBtn" type="button" aria-pressed="true">소리 켬</button>
     </div>
+    <p class="dday" id="dday" hidden></p>
     <div class="ranks" id="ranks" aria-label="칭호 단계"></div>
     <p class="rank-next" id="rankNext"></p>
     <p class="warn" id="storageWarn" hidden>이 아이패드에 기록이 저장되지 않고 있어요. 개인정보 보호 브라우징(검은 주소창)을 끄고 다시 열어 주세요.</p>
+    <div class="warn" id="inAppWarn" hidden>
+      <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열고, Safari 즐겨찾기로만 들어와 주세요.</p>
+      <button class="plain-btn open-safari" type="button" hidden>Safari로 열기</button>
+    </div>
     <button class="start" id="startBtn" type="button"><span id="startMain">오늘의 공부 시작</span><small id="startSub"></small></button>
     <div class="done-banner" id="doneBanner" hidden><b id="doneMain"></b><span id="doneSub"></span></div>
     <div class="sub-actions">
@@ -368,7 +379,12 @@ p { margin: 0; }
         <p id="hongScore"></p>
         <p id="hongDate"></p>
       </div>
-      <p>21일 동안 정말 수고했어요!</p>
+      <p>6일 동안 정말 수고했어요!</p>
+      <div class="coupon" id="hongCoupon" hidden>
+        <p class="k">보상 쿠폰</p>
+        <p class="v" id="hongReward"></p>
+        <p class="n">부모님께 이 화면을 보여 주세요</p>
+      </div>
     </div>
     <button class="go-btn" type="button" data-go="home">홈으로</button>
   </section>
@@ -428,5 +444,6 @@ p { margin: 0; }
 
 <script src="data.js"></script>
 <script src="logic.js"></script>
+<script src="sound.js"></script>
 <script src="ui.js"></script>
 </body></html>

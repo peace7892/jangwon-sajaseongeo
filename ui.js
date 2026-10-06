@@ -38,6 +38,11 @@
   }
 
   // ---------- 저장 ----------
+  // 카카오톡·네이버 같은 앱 안의 브라우저는 앱을 닫으면 기록을 지울 수 있어서 Safari로 열도록 안내한다
+  var IN_APP = /KAKAOTALK|NAVER\(inapp|Line\/|Instagram|FBAN|FBAV|DaumApps/i.test(navigator.userAgent || '');
+  var IS_KAKAO = /KAKAOTALK/i.test(navigator.userAgent || '');
+  // 브라우저에게 이 사이트 기록을 오래 보관해 달라고 요청한다 (지원하는 브라우저만)
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () { /* 거절돼도 평소처럼 저장된다 */ }); } catch (e) { /* 미지원 */ }
   var storageOk = true;
   function load() {
     var raw = null;
@@ -67,55 +72,65 @@
   }
 
   // ---------- 소리 ----------
-  var ac = null;
-  function audio() {
-    if (!state.sound) return null;
-    if (!ac) {
-      // 아이패드는 웹 효과음을 무음 모드에서 꺼 버리는 채널로 보낸다. 음악처럼 '재생' 채널로 보내 달라고 한다 (Safari 17+)
-      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 지원하지 않는 브라우저 */ }
-      try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+  // 효과음을 WAV로 만들어 일반 오디오로 재생한다. 아이패드는 오디오마다 첫 터치 때 한 번 "깨워야" 나중에 재생할 수 있어서,
+  // 첫 터치에 모든 효과음을 소리 없이 한 번씩 재생해 둔다.
+  var players = {}, unlocked = false, lastPlay = null;
+  function player(name) {
+    if (!players[name]) {
+      var bytes = window.Sound.encodeWav(window.Sound.renderClip(window.Sound.CLIPS[name], window.Sound.RATE), window.Sound.RATE);
+      var a = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
+      a.preload = 'auto';
+      a.addEventListener('ended', function () { a.busy = false; });
+      players[name] = a;
     }
-    // 앱을 오가거나 화면이 꺼졌다 켜지면 'interrupted'가 되므로, 'running'이 아니면 다시 켠다
-    if (ac.state !== 'running' && ac.resume) ac.resume().catch(function () { /* 다음 터치에서 다시 시도 */ });
-    return ac;
+    return players[name];
+  }
+  function unlockAudio() {
+    if (unlocked) return;
+    unlocked = true;
+    Object.keys(window.Sound.CLIPS).forEach(function (name) {
+      var a = player(name);
+      if (a.busy) return;
+      a.muted = true;
+      var settle = function () {
+        if (!a.busy) { a.pause(); a.currentTime = 0; }
+        a.muted = false;
+      };
+      var p = a.play();
+      if (p && p.then) p.then(settle, function () { a.muted = false; unlocked = false; });
+      else settle();
+    });
+  }
+  document.addEventListener('touchend', unlockAudio, true);
+  document.addEventListener('click', unlockAudio, true);
+  function playClip(name) {
+    if (!state.sound) return;
+    var a = player(name);
+    a.busy = true;
+    a.muted = false;
+    try { a.currentTime = 0; } catch (e) { /* 아직 불러오는 중이면 처음부터 재생된다 */ }
+    var p = a.play();
+    if (p && p.then) {
+      p.then(function () { lastPlay = { ok: true }; }, function (err) {
+        a.busy = false;
+        lastPlay = { ok: false, why: (err && err.name) || '알 수 없음' };
+      });
+    }
   }
   function soundStatus() {
     if (!state.sound) return '앱 소리가 꺼져 있어요. 홈 화면 오른쪽 위 “소리 끔”을 눌러 켜 주세요.';
-    var session = navigator.audioSession ? navigator.audioSession.type : '지원 안 함';
-    return '소리 장치: ' + (ac ? ac.state : '없음') + ' · 재생 채널: ' + session;
-  }
-  function tone(freq, at, dur, type, vol) {
-    var a = audio();
-    if (!a) return;
-    var o = a.createOscillator(), g = a.createGain(), t = a.currentTime + at;
-    o.type = type || 'sine';
-    o.frequency.value = freq;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol || 0.18, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g);
-    g.connect(a.destination);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-  function arpeggio(notes, gap, type, vol) {
-    notes.forEach(function (f, i) { tone(f, i * gap, 0.45, type, vol); });
+    if (!lastPlay) return '소리를 아직 재생하지 못했어요. 한 번 더 눌러 주세요.';
+    if (lastPlay.ok) return '소리를 재생했어요. 그래도 안 들리면 아이패드 볼륨 버튼으로 소리를 키워 주세요.';
+    return '소리 재생이 막혔어요 (' + lastPlay.why + '). 이 문구를 Claude에게 알려 주세요.';
   }
   var sfx = {
-    stamp: function (combo) {
-      tone(90, 0, 0.18, 'triangle', 0.35);
-      tone(1046, 0.09, 0.25);
-      tone(1568, 0.19, 0.35);
-      if (combo >= 2) tone(2093, 0.3, 0.4, 'sine', 0.12);
-    },
-    gold: function () {
-      tone(90, 0, 0.18, 'triangle', 0.35);
-      [1046, 1318, 1568, 2093].forEach(function (f, i) { tone(f, 0.08 + i * 0.09, 0.4, 'sine', 0.15); });
-    },
-    wrong: function () { tone(262, 0, 0.18, 'sine', 0.12); tone(220, 0.16, 0.28, 'sine', 0.12); },
-    pop: function () { tone(660, 0, 0.08, 'square', 0.06); tone(990, 0.05, 0.12, 'sine', 0.12); },
-    flip: function () { arpeggio([784, 1046, 1318], 0.06, 'triangle', 0.1); },
-    fanfare: function () { arpeggio([523, 659, 784, 1046, 1318, 1568], 0.07, 'triangle', 0.12); }
+    stamp: function (combo) { playClip(combo >= 2 ? 'combo' : 'stamp'); },
+    gold: function () { playClip('gold'); },
+    wrong: function () { playClip('wrong'); },
+    pop: function () { playClip('pop'); },
+    flip: function () { playClip('flip'); },
+    fanfare: function () { playClip('fanfare'); },
+    rattle: function () { playClip('rattle'); }
   };
 
   // ---------- 공통 ----------
@@ -175,6 +190,14 @@
     sfx.pop();
     goHome();
   }
+  // 카카오톡 안에서 열렸으면 Safari(기본 브라우저)로 다시 연다
+  document.querySelectorAll('.open-safari').forEach(function (b) {
+    b.hidden = !IS_KAKAO;
+    b.addEventListener('click', function () {
+      location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(location.href);
+    });
+  });
+  $('nameInAppWarn').hidden = !IN_APP;
   $('nameBtn').addEventListener('click', submitName);
   onEnter($('nameInput'), submitName);
   $('nameInput').addEventListener('input', function () { $('nameErr').textContent = ''; });
@@ -203,6 +226,10 @@
       next.textContent = '모든 카드를 외웠어요. 장원이에요!';
     }
     $('storageWarn').hidden = storageOk;
+    $('inAppWarn').hidden = !IN_APP;
+    var left = L.daysUntil(t, D.EXAM_DATE);
+    $('dday').hidden = left < 0;
+    $('dday').textContent = left > 0 ? '대회까지 ' + left + '일' : '오늘이 대회 날! 힘내요';
 
     renderStart(t);
     var learned = renderTiles();
@@ -212,21 +239,31 @@
   }
 
   function renderStart(t) {
-    var n = state.stickers.length, done = L.doneToday(state, t);
-    if (n >= 21 || done) {
+    var n = state.stickers.length, done = L.doneToday(state, t), act = L.activeSession(state, t);
+    if (!act && (n >= L.LAST_DAY || done)) {
       $('startBtn').hidden = true;
       $('doneBanner').hidden = false;
-      $('doneMain').textContent = n >= 21 ? '21일을 모두 마쳤어요!' : '오늘 공부 끝!';
-      $('doneSub').textContent = n >= 21
+      $('doneMain').textContent = n >= L.LAST_DAY ? L.LAST_DAY + '일을 모두 마쳤어요!' : '오늘 공부 끝!';
+      $('doneSub').textContent = n >= L.LAST_DAY
         ? '대회 날까지 연습 문제로 복습해요.'
         : '내일 또 만나요. 더 하고 싶으면 아래 연습 문제를 풀어요.';
       return;
     }
     $('startBtn').hidden = false;
     $('doneBanner').hidden = true;
+    if (act) {
+      var qTotal = act.steps.filter(isQ).length;
+      var qDone = act.steps.slice(0, act.i).filter(isQ).length;
+      var cardsLeft = act.steps.slice(act.i).filter(isCard).length;
+      $('startMain').textContent = act.kind === 'exam' ? '과거 시험 이어서 보기' : '이어서 하기';
+      $('startSub').textContent = cardsLeft
+        ? '새 카드 ' + cardsLeft + '장 남았어요'
+        : '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
+      return;
+    }
     if (L.isExamDay(state, t)) {
       $('startMain').textContent = '과거 시험 보러 가기';
-      $('startSub').textContent = '21일째 · 20문제 · 홍패를 받아요';
+      $('startSub').textContent = L.LAST_DAY + '일째 · ' + D.CARDS.length + '문제 · 홍패를 받아요';
       return;
     }
     var preview = L.buildSession(state, t, D, Math.random);
@@ -241,23 +278,19 @@
   }
 
   var ROT = [-8, 6, -4, 9, -6, 5, -9];
+  function isChestDay(d) { return !!D.REWARDS[d] && d < L.LAST_DAY; }
   function renderBoard(t) {
     var board = $('board'), n = state.stickers.length, done = L.doneToday(state, t);
     board.innerHTML = '';
-    $('boardCount').textContent = n + ' / 21일';
-    for (var w = 0; w < 3; w++) {
-      var row = el('div', 'week');
-      row.appendChild(el('span', 'wk', (w + 1) + '주'));
-      var cells = el('div', 'cells');
-      for (var d = w * 7 + 1; d <= w * 7 + 7; d++) cells.appendChild(cellFor(d, n, done));
-      row.appendChild(cells);
-      board.appendChild(row);
-    }
+    $('boardCount').textContent = n + ' / ' + L.LAST_DAY + '일';
+    var cells = el('div', 'cells');
+    for (var d = 1; d <= L.LAST_DAY; d++) cells.appendChild(cellFor(d, n, done));
+    board.appendChild(cells);
     justStuck = 0;
   }
   function cellFor(d, n, done) {
     var sticker = state.stickers[d - 1];
-    var isChest = d === 7 || d === 14, isFinal = d === 21;
+    var isChest = isChestDay(d), isFinal = d === L.LAST_DAY;
     var chest = isChest ? L.chestState(state, d) : null;
     var clickable = (isChest && chest !== 'locked') || (isFinal && !!state.exam);
     var c = el(clickable ? 'button' : 'div', 'cell');
@@ -329,29 +362,45 @@
     sfx.pop();
   });
   $('startBtn').addEventListener('click', function () {
-    var t = today();
+    var t = today(), act = L.activeSession(state, t);
+    if (act) { beginSession(act); return; }
     if (L.doneToday(state, t)) { renderHome(); return; }
     var built = L.buildSession(state, t, D, Math.random);
-    beginSession(built.kind, built.steps);
+    if (!built.steps.length) { renderHome(); return; }
+    setState(L.startSession(state, built, t));
+    beginSession(state.session);
   });
   $('practiceBtn').addEventListener('click', function () { startPractice(10, false); });
   $('examPracticeBtn').addEventListener('click', function () { startPractice(20, true); });
   $('parentLink').addEventListener('click', showParent);
 
   // ---------- 공부 진행 ----------
-  function beginSession(kind, steps) {
-    if (!steps.length) { toast('먼저 오늘의 공부로 카드를 얻어 보세요.'); return; }
+  // 오늘의 공부와 과거 시험은 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
+  // 연습 문제는 저장하지 않는다.
+  function beginSession(saved) {
+    if (!saved.steps.length) { toast('먼저 오늘의 공부로 카드를 얻어 보세요.'); return; }
     S = {
-      kind: kind, steps: steps, i: 0, qn: 0, combo: 0, right: 0,
-      total: steps.filter(isQ).length,
-      newCards: steps.filter(isCard).length,
-      starsBefore: L.totalStars(state)
+      kind: saved.kind, steps: saved.steps, i: saved.i || 0, combo: 0, right: saved.right || 0,
+      qn: saved.steps.slice(0, saved.i || 0).filter(isQ).length,
+      total: saved.steps.filter(isQ).length,
+      newCards: saved.newCards != null ? saved.newCards : saved.steps.filter(isCard).length,
+      starsBefore: saved.starsBefore != null ? saved.starsBefore : L.totalStars(state),
+      persist: saved.kind !== 'practice'
     };
     $('combo').hidden = true;
     runStep();
   }
   function startPractice(n, all) {
-    beginSession('practice', L.buildPractice(state, D, n, Math.random, all));
+    beginSession({ kind: 'practice', steps: L.buildPractice(state, D, n, Math.random, all) });
+  }
+  // 카드 한 장이나 문제 하나를 마칠 때마다 부른다. 마지막 단계면 그 자리에서 오늘을 마친 것으로 기록한다
+  function stepDone(correct) {
+    if (!S.persist) return;
+    setState(L.advanceSession(state, correct));
+    if (S.i + 1 < S.steps.length) return;
+    var t = today();
+    if (S.kind === 'exam') setState(L.endSession(L.recordExam(state, S.right, S.total, t)));
+    else setState(L.endSession(L.finishDaily(state, t)));
   }
   function runStep() {
     if (S.i >= S.steps.length) { finish(); return; }
@@ -420,6 +469,7 @@
     inner.classList.add('flipped');
     sfx.flip();
     setState(L.learnCard(state, S.steps[S.i].id, today()));
+    stepDone(false);
     $('cardNext').hidden = false;
   });
   $('cardNext').addEventListener('click', function () {
@@ -565,6 +615,7 @@
       setFeedback(false, false, wrongNote(q, chosenId));
     }
     showCombo();
+    stepDone(correct);
   }
   function showNext() {
     $('nextBtn').textContent = nextLabel();
@@ -617,12 +668,11 @@
 
   // ---------- 결과 ----------
   var resultAction = 'home';
+  // 기록은 마지막 문제를 풀 때 이미 저장했다(stepDone). 여기서는 결과만 보여 준다
   function finish() {
-    var t = today();
     $('progressFill').style.width = '100%';
     if (S.kind === 'exam') {
-      setState(L.recordExam(state, S.right, S.total, t));
-      justStuck = 21;
+      justStuck = L.LAST_DAY;
       S = null;
       showHong(true);
       return;
@@ -638,10 +688,10 @@
     if (S.newCards) gain.push('새 카드 ' + S.newCards + '장');
     $('resultGain').textContent = gain.join(' · ');
     $('resultGain').hidden = !gain.length;
-    var needSticker = S.kind === 'daily' && !L.doneToday(state, t);
+    var needSticker = S.kind === 'daily';
     $('resultNote').textContent = needSticker
-      ? '이제 오늘의 스티커를 붙여요!'
-      : S.kind === 'practice' ? '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.' : '';
+      ? '오늘 칸에 ⭐ 스티커가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?'
+      : '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.';
     $('resultNote').hidden = !$('resultNote').textContent;
     resultAction = needSticker ? 'sticker' : 'home';
     $('resultBtn').textContent = needSticker ? '스티커 고르러 가기' : '홈으로';
@@ -658,12 +708,12 @@
   // ---------- 스티커 ----------
   var chosenSticker = null;
   function showSticker() {
-    var day = state.stickers.length + 1;
+    var day = state.stickers.length;
     chosenSticker = null;
     $('stickerErr').textContent = '';
-    var sub = day + '일째 칸에 붙어요.';
-    if (day === 7 || day === 14) sub += ' 붙이면 보물상자가 열려요!';
-    else if (day + 1 === 7 || day + 1 === 14) sub += ' 다음 칸은 보물상자예요!';
+    var sub = day + '일째 칸의 ⭐를 원하는 스티커로 바꿔요.';
+    if (isChestDay(day)) sub += ' 바꾸면 보물상자가 열려요!';
+    else if (day + 1 === L.LAST_DAY) sub += ' 다음은 과거 시험이에요!';
     $('stickerSub').textContent = sub;
     var box = $('stickers');
     box.innerHTML = '';
@@ -684,19 +734,18 @@
   }
   $('stickBtn').addEventListener('click', function () {
     if (!chosenSticker) { $('stickerErr').textContent = '스티커를 먼저 골라 주세요.'; return; }
-    var day = state.stickers.length + 1;
-    setState(L.addSticker(state, chosenSticker, today()));
-    if (state.stickers.length !== day) { goHome(); return; }
+    var day = state.stickers.length;
+    setState(L.setTodaySticker(state, chosenSticker, today()));
     justStuck = day;
     sfx.stamp(1);
-    if ((day === 7 || day === 14) && L.chestState(state, day) === 'ready') {
+    if (isChestDay(day) && L.chestState(state, day) === 'ready') {
       openChestView(day);
       return;
     }
     goHome();
     var msg = day + '일째 스티커를 붙였어요!';
-    if (day + 1 === 7 || day + 1 === 14) msg += ' 다음 칸은 보물상자예요.';
-    else if (day + 1 === 21) msg += ' 다음은 과거 시험이에요!';
+    if (isChestDay(day + 1)) msg += ' 다음 칸은 보물상자예요.';
+    else if (day + 1 === L.LAST_DAY) msg += ' 다음은 과거 시험이에요!';
     toast(msg);
   });
 
@@ -736,9 +785,7 @@
     chestOpening = true;
     var btn = $('chestBtn');
     btn.classList.add('wiggle');
-    tone(300, 0, 0.1, 'triangle', 0.1);
-    tone(340, 0.3, 0.1, 'triangle', 0.1);
-    tone(380, 0.6, 0.1, 'triangle', 0.1);
+    sfx.rattle();
     setTimeout(function () {
       setState(L.openChest(state, chestDay, today()));
       btn.hidden = true;
@@ -759,6 +806,9 @@
     $('hongName').textContent = state.name;
     $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답';
     $('hongDate').textContent = longDate(e.d);
+    var reward = D.REWARDS[L.LAST_DAY];
+    $('hongCoupon').hidden = !reward;
+    $('hongReward').textContent = reward || '';
     show('hong');
     if (fresh) {
       sfx.fanfare();
@@ -786,7 +836,7 @@
   $('pSoundBtn').addEventListener('click', function () {
     sfx.fanfare();
     msg('pSoundMsg', '확인하는 중이에요');
-    setTimeout(function () { msg('pSoundMsg', soundStatus()); }, 400);
+    setTimeout(function () { msg('pSoundMsg', soundStatus()); }, 600);
   });
   $('pNameBtn').addEventListener('click', function () {
     var v = $('pName').value.trim();

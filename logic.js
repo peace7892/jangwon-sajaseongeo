@@ -2,14 +2,15 @@
 (function (root) {
   'use strict';
 
-  var REVIEW_GAP = [3, 7, 7, 7];   // 지금 별 개수에 따라, 맞혔을 때 다음 복습까지의 날 수
+  // 6일 계획: 지금 별 개수에 따라, 맞혔을 때 다음 복습까지의 날 수 (다음 날 → 이틀 뒤 → 이틀 뒤)
+  var REVIEW_GAP = [1, 2, 2, 2];
   var REVIEW_CAP = 20;
-  var MIN_QUESTIONS = 10;
-  var EXAM_SIZE = 20;
+  var MIN_QUESTIONS = 10;       // 새 카드가 있는 날 최소 문제 수
+  var REVIEW_DAY_SIZE = 20;     // 새 카드가 없는 복습 날 문제 수
   var CARD_COUNT = 43;
-  var LAST_DAY = 21;
-  var CHEST_DAYS = [7, 14];
+  var LAST_DAY = 6;             // 6일째 = 과거 시험
   var TYPES = ['write', 'm2w', 'w2m'];
+  var MODES = { review: 1, learn: 1, practice: 1, exam: 1 };
   var BACKUP_PREFIX = 'JW1.';
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21,6 +22,10 @@
     var d = new Date(+p[0], +p[1] - 1, +p[2]);
     d.setDate(d.getDate() + n);
     return dateKey(d);
+  }
+  function daysUntil(today, target) {
+    function midnight(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]).getTime(); }
+    return Math.round((midnight(target) - midnight(today)) / 86400000);
   }
 
   // ---------- 정답 판정 ----------
@@ -105,12 +110,17 @@
   function checkWrite(q, input) { return isCorrectWrite(input, q.answer); }
 
   // ---------- 세션 ----------
-  function nextGroup(state, data) {
-    for (var i = 0; i < data.GROUPS.length; i++) {
-      var g = data.GROUPS[i];
-      if (g.ids.some(function (id) { return !state.cards[id]; })) return g;
-    }
-    return null;
+  // 계획상 오늘까지 얻었어야 하는데 아직 못 얻은 카드 (빠진 날이 있으면 따라잡는다)
+  function freshIds(state, day, data) {
+    var ids = [];
+    data.PLAN.slice(0, day).forEach(function (gids) {
+      gids.forEach(function (gid) {
+        data.GROUPS.filter(function (g) { return g.id === gid; })[0].ids.forEach(function (id) {
+          if (!state.cards[id]) ids.push(id);
+        });
+      });
+    });
+    return ids;
   }
   function weakestFirst(ids, state, rng) {
     return ids
@@ -127,42 +137,79 @@
   }
   function buildExam(data, rng, n) {
     var map = byId(data);
-    var ids = shuffle(data.CARDS.map(function (c) { return c.id; }), rng).slice(0, n || EXAM_SIZE);
+    var ids = shuffle(data.CARDS.map(function (c) { return c.id; }), rng).slice(0, n || data.CARDS.length);
     return ids.map(function (id, i) {
       return { t: 'q', q: makeQuestion(map[id], TYPES[i % TYPES.length], data, rng, 'exam') };
     });
   }
   function buildSession(state, today, data, rng) {
-    if (isExamDay(state, today)) return { kind: 'exam', group: null, steps: buildExam(data, rng, EXAM_SIZE) };
+    var day = studyDay(state, today);
+    if (isExamDay(state, today)) return { kind: 'exam', day: day, steps: buildExam(data, rng) };
     var map = byId(data), steps = [], used = {};
     dueIds(state, today).forEach(function (id) {
       used[id] = true;
       steps.push({ t: 'q', q: makeQuestion(map[id], reviewTypeFor(state.cards[id].s), data, rng, 'review') });
     });
 
-    // 하루에 한 묶음만: 오늘 이미 카드를 얻었다면, 그 묶음을 마저 채울 때만 새 카드를 준다
-    var group = nextGroup(state, data);
-    var learnedToday = learnedIds(state).filter(function (id) { return state.cards[id].at === today; });
-    if (group && learnedToday.length && !learnedToday.some(function (id) { return map[id].g === group.id; })) group = null;
-    var fresh = group ? group.ids.filter(function (id) { return !state.cards[id]; }) : [];
+    var fresh = freshIds(state, day, data);
     fresh.forEach(function (id) { used[id] = true; steps.push({ t: 'card', id: id }); });
     fresh.forEach(function (id) { steps.push({ t: 'q', q: makeQuestion(map[id], 'm2w', data, rng, 'learn') }); });
     fresh.forEach(function (id) { steps.push({ t: 'q', q: makeQuestion(map[id], 'write', data, rng, 'learn') }); });
 
+    // 계획에 새 묶음이 없는 날(5일째)은 직접 쓰기 위주로 20문제를 채운다
+    var reviewDay = !data.PLAN[day - 1] || data.PLAN[day - 1].length === 0;
+    var target = reviewDay ? REVIEW_DAY_SIZE : MIN_QUESTIONS;
     var count = steps.filter(function (s) { return s.t === 'q'; }).length;
-    if (count < MIN_QUESTIONS) {
+    if (count < target) {
       var pool = learnedIds(state).filter(function (id) { return !used[id]; });
-      weakestFirst(pool, state, rng).slice(0, MIN_QUESTIONS - count).forEach(function (id) {
-        var type = rng() < 0.5 ? 'w2m' : 'm2w';
+      weakestFirst(pool, state, rng).slice(0, target - count).forEach(function (id) {
+        var type = reviewDay ? 'write' : rng() < 0.5 ? 'w2m' : 'm2w';
         steps.push({ t: 'q', q: makeQuestion(map[id], type, data, rng, 'practice') });
       });
     }
-    return { kind: 'daily', group: group, steps: steps };
+    return { kind: 'daily', day: day, steps: steps };
   }
   function recordAnswer(state, q, correct, today) {
-    if (q.mode !== 'review' || !state.cards[q.id]) return state;
+    var cs = state.cards[q.id];
+    if (!cs) return state;
+    // 새 카드를 얻은 날 직접 쓰기로 맞히면 첫 별
+    if (q.mode === 'learn') {
+      if (!correct || q.type !== 'write' || cs.s > 0) return state;
+      var learned = clone(state);
+      learned.cards[q.id] = { s: 1, due: cs.due, at: cs.at };
+      return learned;
+    }
+    if (q.mode !== 'review') return state;
     var next = clone(state);
-    next.cards[q.id] = applyReview(state.cards[q.id], correct, today);
+    next.cards[q.id] = applyReview(cs, correct, today);
+    return next;
+  }
+
+  // ---------- 이어서 하기 ----------
+  function startSession(state, built, today) {
+    var next = clone(state);
+    next.session = {
+      d: today, kind: built.kind, day: built.day, steps: built.steps, i: 0, right: 0,
+      newCards: built.steps.filter(function (s) { return s.t === 'card'; }).length,
+      starsBefore: totalStars(state)
+    };
+    return next;
+  }
+  function advanceSession(state, correct) {
+    if (!state.session) return state;
+    var next = clone(state);
+    next.session.i += 1;
+    if (correct) next.session.right += 1;
+    return next;
+  }
+  function activeSession(state, today) {
+    var s = state.session;
+    return s && s.d === today && s.i < s.steps.length ? s : null;
+  }
+  function endSession(state) {
+    if (!state.session) return state;
+    var next = clone(state);
+    next.session = null;
     return next;
   }
   function learnCard(state, id, today) {
@@ -199,6 +246,14 @@
     next.chests[day] = today;
     return next;
   }
+  // 마지막 문제를 풀면 바로 ⭐ 스티커로 오늘을 마친 것으로 기록한다. 스티커 고르기는 모양만 바꾼다
+  function finishDaily(state, today) { return addSticker(state, '⭐', today); }
+  function setTodaySticker(state, emoji, today) {
+    if (!doneToday(state, today)) return state;
+    var next = clone(state);
+    next.stickers[next.stickers.length - 1].e = emoji;
+    return next;
+  }
   function examTitle(score, total) { return score >= Math.ceil(total * 0.9) ? '장원급제' : '급제'; }
   function recordExam(state, score, total, today) {
     var next = clone(addSticker(state, '📜', today));
@@ -208,7 +263,28 @@
 
   // ---------- 기록 ----------
   function emptyState() {
-    return { v: 1, name: '', cards: {}, stickers: [], chests: {}, exam: null, sound: true };
+    return { v: 1, name: '', cards: {}, stickers: [], chests: {}, exam: null, sound: true, session: null };
+  }
+  function validId(id) { return typeof id === 'number' && id >= 1 && id <= CARD_COUNT; }
+  function validStep(st) {
+    if (!st) return false;
+    if (st.t === 'card') return validId(st.id);
+    var q = st.t === 'q' && st.q;
+    if (!q || !validId(q.id) || TYPES.indexOf(q.type) < 0 || !MODES[q.mode]) return false;
+    if (typeof q.prompt !== 'string' || typeof q.answer !== 'string') return false;
+    if (q.type === 'write') return q.choices === undefined;
+    return Array.isArray(q.choices) && q.choices.length >= 2 &&
+      q.choices.every(function (c) { return c && validId(c.id) && typeof c.text === 'string'; });
+  }
+  function sanitizeSession(x) {
+    if (!x || !DATE_RE.test(x.d) || (x.kind !== 'daily' && x.kind !== 'exam')) return null;
+    if (!Array.isArray(x.steps) || !x.steps.length || x.steps.length > 200 || !x.steps.every(validStep)) return null;
+    var i = Number(x.i), right = Number(x.right);
+    if (!(i >= 0 && i <= x.steps.length) || !(right >= 0 && right <= i)) return null;
+    return {
+      d: x.d, kind: x.kind, day: Number(x.day) || 1, steps: x.steps, i: i, right: right,
+      newCards: Number(x.newCards) || 0, starsBefore: Number(x.starsBefore) || 0
+    };
   }
   function sanitize(obj) {
     if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
@@ -229,13 +305,14 @@
         .map(function (x) { return { d: x.d, e: x.e.slice(0, 8) }; });
     }
     if (obj.chests && typeof obj.chests === 'object') {
-      CHEST_DAYS.forEach(function (d) { if (DATE_RE.test(obj.chests[d])) s.chests[d] = obj.chests[d]; });
+      for (var d = 1; d <= LAST_DAY; d++) if (DATE_RE.test(obj.chests[d])) s.chests[d] = obj.chests[d];
     }
     var e = obj.exam;
     if (e && typeof e.score === 'number' && typeof e.total === 'number' && DATE_RE.test(e.d)) {
       s.exam = { score: e.score, total: e.total, d: e.d };
     }
     if (typeof obj.sound === 'boolean') s.sound = obj.sound;
+    s.session = sanitizeSession(obj.session);
     return s;
   }
   function toBase64(str) {
@@ -260,14 +337,17 @@
   }
 
   var Logic = {
-    dateKey: dateKey, addDays: addDays,
+    LAST_DAY: LAST_DAY,
+    dateKey: dateKey, addDays: addDays, daysUntil: daysUntil,
     normalize: normalize, isCorrectWrite: isCorrectWrite,
     reviewTypeFor: reviewTypeFor, newCardState: newCardState, applyReview: applyReview,
     dueIds: dueIds, totalStars: totalStars, rankOf: rankOf,
     pickDistractors: pickDistractors, makeQuestion: makeQuestion, checkChoice: checkChoice, checkWrite: checkWrite,
-    nextGroup: nextGroup, buildSession: buildSession, buildPractice: buildPractice, buildExam: buildExam,
+    buildSession: buildSession, buildPractice: buildPractice, buildExam: buildExam,
     recordAnswer: recordAnswer, learnCard: learnCard,
+    startSession: startSession, advanceSession: advanceSession, activeSession: activeSession, endSession: endSession,
     doneToday: doneToday, studyDay: studyDay, isExamDay: isExamDay, addSticker: addSticker,
+    finishDaily: finishDaily, setTodaySticker: setTodaySticker,
     chestState: chestState, openChest: openChest, examTitle: examTitle, recordExam: recordExam,
     emptyState: emptyState, sanitize: sanitize, encodeBackup: encodeBackup, decodeBackup: decodeBackup
   };
