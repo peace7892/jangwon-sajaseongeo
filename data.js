@@ -266,12 +266,10 @@
 
   var STICKERS = ['🐯', '🦊', '🐼', '🐉', '🌸', '🍀', '🌕', '🍡'];
 
-  // 공부한 날 수별 보상 (부모님이 정함). 마지막 날 보상은 홍패와 함께 나온다
-  var REWARDS = {
-    6: '용돈 5천 원'
-  };
+  // 과거 시험을 마치면 돌리는 선물 룰렛 (5칸, 한 번만 돌린다)
+  var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
-  var DATA = { CARDS: CARDS, GROUPS: GROUPS, PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, REWARDS: REWARDS };
+  var DATA = { CARDS: CARDS, GROUPS: GROUPS, PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);

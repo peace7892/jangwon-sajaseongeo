@@ -7,6 +7,8 @@
   var REVIEW_CAP = 20;
   var MIN_QUESTIONS = 10;       // 새 카드가 있는 날 최소 문제 수
   var REVIEW_DAY_SIZE = 20;     // 새 카드가 없는 복습 날 문제 수
+  var REVIEW_SESSION_SIZE = 15; // 하루 두 번째 공부(복습) 문제 수
+  var REVIEW_SESSION_MAX = 20;
   var CARD_COUNT = 43;
   var LAST_DAY = 6;             // 6일째 = 과거 시험
   var TYPES = ['write', 'm2w', 'w2m'];
@@ -169,6 +171,24 @@
     }
     return { kind: 'daily', day: day, steps: steps };
   }
+  // 하루 두 번째 공부: 오늘 얻은 카드를 직접 쓰기로 먼저, 이어서 복습할 때가 된 카드와 약한 카드로 15문제쯤
+  function buildReview(state, today, data, rng) {
+    var map = byId(data), steps = [], used = {};
+    function add(id, type) {
+      used[id] = true;
+      steps.push({ t: 'q', q: makeQuestion(map[id], type, data, rng, 'review') });
+    }
+    var todays = learnedIds(state).filter(function (id) { return state.cards[id].at === today; });
+    shuffle(todays, rng).forEach(function (id) { add(id, 'write'); });
+    dueIds(state, today).forEach(function (id) { if (!used[id]) add(id, reviewTypeFor(state.cards[id].s)); });
+    if (steps.length < REVIEW_SESSION_SIZE) {
+      var pool = learnedIds(state).filter(function (id) { return !used[id]; });
+      weakestFirst(pool, state, rng).slice(0, REVIEW_SESSION_SIZE - steps.length).forEach(function (id) {
+        add(id, state.cards[id].s >= 1 ? 'write' : 'm2w');
+      });
+    }
+    return { kind: 'review', day: studyDay(state, today), steps: steps.slice(0, REVIEW_SESSION_MAX) };
+  }
   function recordAnswer(state, q, correct, today) {
     var cs = state.cards[q.id];
     if (!cs) return state;
@@ -219,51 +239,60 @@
     return next;
   }
 
-  // ---------- 스티커 · 보물상자 · 과거 시험 ----------
-  function doneToday(state, today) {
-    var s = state.stickers;
-    return s.length > 0 && s[s.length - 1].d === today;
+  // ---------- 스티커 · 하루 두 번 · 과거 시험 ----------
+  // 스티커는 { d: 날짜, e: 모양, k: 'main'(그날 첫 번째 공부) | 'review'(두 번째 공부), day: 몇째 날 }
+  function mains(state) { return state.stickers.filter(function (s) { return s.k !== 'review'; }); }
+  function doneToday(state, today) { return mains(state).some(function (s) { return s.d === today; }); }
+  function reviewDoneToday(state, today) {
+    return state.stickers.some(function (s) { return s.k === 'review' && s.d === today; });
   }
   function studyDay(state, today) {
-    return doneToday(state, today) ? state.stickers.length : Math.min(LAST_DAY, state.stickers.length + 1);
+    var n = mains(state).length;
+    return doneToday(state, today) ? n : Math.min(LAST_DAY, n + 1);
   }
   function isExamDay(state, today) {
-    return !doneToday(state, today) && state.stickers.length === LAST_DAY - 1;
+    return !doneToday(state, today) && mains(state).length === LAST_DAY - 1;
   }
-  function addSticker(state, emoji, today) {
-    if (doneToday(state, today) || state.stickers.length >= LAST_DAY) return state;
+  function canReview(state, today) {
+    return doneToday(state, today) && !reviewDoneToday(state, today) && mains(state).length < LAST_DAY;
+  }
+  function addSticker(state, emoji, today, kind) {
+    kind = kind || 'main';
+    var n = mains(state).length;
+    if (kind === 'main' && (doneToday(state, today) || n >= LAST_DAY)) return state;
+    if (kind === 'review' && !canReview(state, today)) return state;
     var next = clone(state);
-    next.stickers.push({ d: today, e: emoji });
+    next.stickers.push({ d: today, e: emoji, k: kind, day: kind === 'main' ? n + 1 : n });
     return next;
   }
-  function chestState(state, day) {
-    if (state.chests[day]) return 'opened';
-    return state.stickers.length >= day ? 'ready' : 'locked';
-  }
-  function openChest(state, day, today) {
-    if (chestState(state, day) !== 'ready') return state;
-    var next = clone(state);
-    next.chests[day] = today;
-    return next;
-  }
-  // 마지막 문제를 풀면 바로 ⭐ 스티커로 오늘을 마친 것으로 기록한다. 스티커 고르기는 모양만 바꾼다
-  function finishDaily(state, today) { return addSticker(state, '⭐', today); }
+  // 마지막 문제를 풀면 바로 ⭐ 스티커로 마친 것으로 기록한다. 스티커 고르기는 모양만 바꾼다
+  function finishDaily(state, today) { return addSticker(state, '⭐', today, 'main'); }
+  function finishReview(state, today) { return addSticker(state, '⭐', today, 'review'); }
   function setTodaySticker(state, emoji, today) {
-    if (!doneToday(state, today)) return state;
+    var last = state.stickers[state.stickers.length - 1];
+    if (!last || last.d !== today) return state;
     var next = clone(state);
     next.stickers[next.stickers.length - 1].e = emoji;
     return next;
   }
   function examTitle(score, total) { return score >= Math.ceil(total * 0.9) ? '장원급제' : '급제'; }
   function recordExam(state, score, total, today) {
-    var next = clone(addSticker(state, '📜', today));
+    var next = clone(addSticker(state, '📜', today, 'main'));
     next.exam = { score: score, total: total, d: today };
+    return next;
+  }
+  // 과거 시험을 마친 뒤 선물 룰렛을 한 번만 돌린다
+  function pickPrize(state, prizes, rng, today) {
+    if (state.prize || !state.exam) return state;
+    var i = Math.min(prizes.length - 1, Math.floor(rng() * prizes.length));
+    var next = clone(state);
+    next.prize = { i: i, item: prizes[i], d: today };
     return next;
   }
 
   // ---------- 기록 ----------
   function emptyState() {
-    return { v: 1, name: '', cards: {}, stickers: [], chests: {}, exam: null, sound: true, session: null };
+    return { v: 1, name: '', cards: {}, stickers: [], exam: null, prize: null, sound: true, session: null };
   }
   function validId(id) { return typeof id === 'number' && id >= 1 && id <= CARD_COUNT; }
   function validStep(st) {
@@ -277,7 +306,7 @@
       q.choices.every(function (c) { return c && validId(c.id) && typeof c.text === 'string'; });
   }
   function sanitizeSession(x) {
-    if (!x || !DATE_RE.test(x.d) || (x.kind !== 'daily' && x.kind !== 'exam')) return null;
+    if (!x || !DATE_RE.test(x.d) || ['daily', 'review', 'exam'].indexOf(x.kind) < 0) return null;
     if (!Array.isArray(x.steps) || !x.steps.length || x.steps.length > 200 || !x.steps.every(validStep)) return null;
     var i = Number(x.i), right = Number(x.right);
     if (!(i >= 0 && i <= x.steps.length) || !(right >= 0 && right <= i)) return null;
@@ -299,17 +328,26 @@
       });
     }
     if (Array.isArray(obj.stickers)) {
-      s.stickers = obj.stickers
-        .filter(function (x) { return x && DATE_RE.test(x.d) && typeof x.e === 'string' && x.e.length > 0; })
-        .slice(0, LAST_DAY)
-        .map(function (x) { return { d: x.d, e: x.e.slice(0, 8) }; });
-    }
-    if (obj.chests && typeof obj.chests === 'object') {
-      for (var d = 1; d <= LAST_DAY; d++) if (DATE_RE.test(obj.chests[d])) s.chests[d] = obj.chests[d];
+      var n = 0;   // 예전 기록의 스티커(종류 없음)는 첫 번째 공부 스티커로 본다
+      obj.stickers.forEach(function (x) {
+        if (!x || !DATE_RE.test(x.d) || typeof x.e !== 'string' || !x.e.length) return;
+        if (x.k === 'review') {
+          if (n < 1) return;
+          var day = Math.max(1, Math.min(n, Number(x.day) || n));
+          s.stickers.push({ d: x.d, e: x.e.slice(0, 8), k: 'review', day: day });
+        } else if (n < LAST_DAY) {
+          n += 1;
+          s.stickers.push({ d: x.d, e: x.e.slice(0, 8), k: 'main', day: n });
+        }
+      });
     }
     var e = obj.exam;
     if (e && typeof e.score === 'number' && typeof e.total === 'number' && DATE_RE.test(e.d)) {
       s.exam = { score: e.score, total: e.total, d: e.d };
+    }
+    var p = obj.prize;
+    if (p && typeof p.i === 'number' && p.i >= 0 && p.i < 10 && typeof p.item === 'string' && DATE_RE.test(p.d)) {
+      s.prize = { i: p.i, item: p.item.slice(0, 30), d: p.d };
     }
     if (typeof obj.sound === 'boolean') s.sound = obj.sound;
     s.session = sanitizeSession(obj.session);
@@ -343,12 +381,13 @@
     reviewTypeFor: reviewTypeFor, newCardState: newCardState, applyReview: applyReview,
     dueIds: dueIds, totalStars: totalStars, rankOf: rankOf,
     pickDistractors: pickDistractors, makeQuestion: makeQuestion, checkChoice: checkChoice, checkWrite: checkWrite,
-    buildSession: buildSession, buildPractice: buildPractice, buildExam: buildExam,
+    buildSession: buildSession, buildReview: buildReview, buildPractice: buildPractice, buildExam: buildExam,
     recordAnswer: recordAnswer, learnCard: learnCard,
     startSession: startSession, advanceSession: advanceSession, activeSession: activeSession, endSession: endSession,
-    doneToday: doneToday, studyDay: studyDay, isExamDay: isExamDay, addSticker: addSticker,
-    finishDaily: finishDaily, setTodaySticker: setTodaySticker,
-    chestState: chestState, openChest: openChest, examTitle: examTitle, recordExam: recordExam,
+    doneToday: doneToday, reviewDoneToday: reviewDoneToday, canReview: canReview,
+    studyDay: studyDay, isExamDay: isExamDay, addSticker: addSticker,
+    finishDaily: finishDaily, finishReview: finishReview, setTodaySticker: setTodaySticker,
+    examTitle: examTitle, recordExam: recordExam, pickPrize: pickPrize,
     emptyState: emptyState, sanitize: sanitize, encodeBackup: encodeBackup, decodeBackup: decodeBackup
   };
   if (typeof module === 'object' && module.exports) module.exports = Logic;

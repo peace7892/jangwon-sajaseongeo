@@ -87,6 +87,30 @@ p { margin: 0; }
 .panel-head span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .board { display: grid; gap: 14px; padding-bottom: 6px; }
 .cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.daycol { display: grid; gap: 12px; justify-items: stretch; min-width: 0; }
+.daylbl { text-align: center; font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
+.cell.rev { border-color: var(--cheong-1); font-size: 0.75rem; }
+.cell.gift { border: 3px solid var(--hwang); background: var(--hwang-soft); }
+.cell.gift.ready { animation: glow 1.4s ease-in-out infinite; }
+.board-legend { font-size: 0.85rem; color: var(--ink-soft); }
+
+.prize-stage { background: var(--nam); color: var(--white); }
+.prize-stage h2 { font-size: 1.8rem; }
+.wheel-wrap { position: relative; width: min(320px, 78vw); aspect-ratio: 1; max-width: 100%; margin-top: 10px; }
+.wheel { position: absolute; inset: 0; border-radius: 50%; border: 8px solid var(--hwang); overflow: hidden; cursor: pointer;
+  transition: transform 4.6s cubic-bezier(.12,.62,.12,1); box-shadow: 0 0 0 4px rgba(255,255,255,0.18); }
+.wheel.instant { transition: none; }
+.wheel .seg { position: absolute; inset: 0; pointer-events: none; }
+.wheel .seg span { position: absolute; top: 9%; left: 50%; transform: translateX(-50%); width: 36%; text-align: center;
+  font-family: var(--font-display); font-size: clamp(0.8rem, 3.4vw, 1rem); line-height: 1.2; color: var(--ink); overflow-wrap: anywhere; }
+.wheel .hub { position: absolute; left: 50%; top: 50%; width: 22%; height: 22%; transform: translate(-50%, -50%); border-radius: 50%;
+  background: var(--white); border: 4px solid var(--hwang); display: grid; place-items: center; font-size: clamp(1.3rem, 6vw, 2rem); }
+.pointer { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); z-index: 2; width: 0; height: 0;
+  border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 30px solid var(--ju); }
+.spin-btn { background: var(--hwang); color: var(--ink); box-shadow: 0 5px 0 var(--hwang-deep); }
+.gift-btn { display: grid; justify-items: center; gap: 4px; border: 3px dashed var(--hwang); border-radius: 18px; background: var(--white);
+  padding: 14px 22px; font-size: 3rem; line-height: 1; animation: glow 1.4s ease-in-out infinite; }
+.gift-btn span { font-family: var(--font-display); font-size: 1.15rem; color: var(--hwang-deep); }
 .dday { justify-self: start; font-family: var(--font-display); font-size: 1.05rem; color: var(--white); background: var(--ju); border-radius: 999px; padding: 2px 14px; margin-top: -6px; }
 .warn { display: grid; gap: 8px; }
 .warn .plain-btn { justify-self: start; }
@@ -98,7 +122,6 @@ p { margin: 0; }
 }
 .cell .stk { font-size: clamp(1.4rem, 5vw, 2.2rem); line-height: 1; }
 .cell.filled { border-style: solid; border-color: var(--cheong-1); background: var(--white); }
-.cell.chest { border: 3px solid var(--hwang); background: var(--hwang-soft); }
 .cell.final { border: 3px solid var(--ju); background: var(--ju-soft); }
 .cell.locked .stk { filter: grayscale(0.85); opacity: 0.6; }
 .cell.today { border: 3px solid var(--cheong); color: var(--cheong); font-family: var(--font-display); font-size: 0.95rem; animation: pulse 1.6s ease-in-out infinite; }
@@ -208,11 +231,6 @@ p { margin: 0; }
 
 /* 보물상자 · 홍패 */
 .stage { position: relative; overflow: hidden; border-radius: 22px; padding: 28px 20px; display: grid; justify-items: center; gap: 14px; text-align: center; min-height: 380px; align-content: center; }
-.chest-stage { background: var(--nam); color: var(--white); }
-.chest-stage h2 { font-size: 1.8rem; }
-.chest-btn { border: 0; background: transparent; font-size: 7rem; line-height: 1; padding: 0; }
-.chest-btn.wiggle { animation: wiggle 0.9s ease-in-out; }
-@keyframes wiggle { 0%,100% { transform: rotate(0); } 15% { transform: rotate(-12deg) scale(1.05); } 30% { transform: rotate(10deg) scale(1.1); } 45% { transform: rotate(-8deg) scale(1.15); } 60% { transform: rotate(6deg) scale(1.2); } 80% { transform: scale(1.35); } }
 .coupon { background: var(--white); color: var(--ink); border-radius: 18px; border: 3px dashed var(--hwang); padding: 20px 22px; display: grid; gap: 6px; max-width: 420px; width: 100%; animation: pop 0.5s cubic-bezier(.2,1.6,.4,1); }
 .coupon .k { font-family: var(--font-display); color: var(--hwang-deep); font-size: 1.05rem; }
 .coupon .v { font-family: var(--font-display); font-size: 1.8rem; line-height: 1.3; overflow-wrap: anywhere; }
@@ -222,7 +240,7 @@ p { margin: 0; }
 .hong-stage { background: var(--hwang-soft); }
 .hongpae { background: var(--ju); color: var(--white); border-radius: 12px; padding: 26px 22px; display: grid; gap: 8px; text-align: center; border: 6px double var(--hwang-soft); outline: 3px solid var(--ju); max-width: 420px; width: 100%; }
 .hongpae .hj { font-family: var(--font-hanja); font-weight: 700; font-size: 2.4rem; letter-spacing: 0.3em; }
-.hongpae .t { font-family: var(--font-display); font-size: 1.5rem; }
+.hongpae .t { font-family: var(--font-display); font-size: 1.5rem; word-break: keep-all; }
 .hongpae .nm { font-family: var(--font-display); font-size: 2.4rem; line-height: 1.2; overflow-wrap: anywhere; }
 
 /* 부모님 메뉴 */
@@ -298,6 +316,7 @@ p { margin: 0; }
     <div class="panel">
       <div class="panel-head"><h2>스티커판</h2><span id="boardCount"></span></div>
       <div class="board" id="board"></div>
+      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 마지막 날 🎁를 누르면 선물 룰렛!</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>사자성어 도감</h2><span id="dogamCount"></span></div>
@@ -360,14 +379,18 @@ p { margin: 0; }
     <button class="go-btn" id="stickBtn" type="button">붙이기</button>
   </section>
 
-  <section class="view" id="v-chest" aria-label="보물상자" hidden>
-    <div class="stage chest-stage" id="chestStage">
-      <h2 id="chestTitle"></h2>
-      <button class="chest-btn" id="chestBtn" type="button" aria-label="보물상자 열기">🎁</button>
-      <div id="couponSlot" style="display:contents"></div>
-      <p id="chestHint"></p>
+  <section class="view" id="v-prize" aria-label="선물 룰렛" hidden>
+    <div class="stage prize-stage" id="prizeStage">
+      <h2>마지막 선물 룰렛</h2>
+      <div class="wheel-wrap">
+        <div class="pointer" aria-hidden="true"></div>
+        <div class="wheel" id="wheel" role="img" aria-label="선물 룰렛"></div>
+      </div>
+      <button class="go-btn spin-btn" id="spinBtn" type="button">룰렛 돌리기</button>
+      <div id="prizeSlot" style="display:contents"></div>
+      <p id="prizeHint" aria-live="polite"></p>
     </div>
-    <button class="go-btn" id="chestHome" type="button" data-go="home" hidden>홈으로</button>
+    <button class="go-btn" id="prizeHome" type="button" data-go="home" hidden>홈으로</button>
   </section>
 
   <section class="view" id="v-hong" aria-label="홍패" hidden>
@@ -380,8 +403,9 @@ p { margin: 0; }
         <p id="hongDate"></p>
       </div>
       <p>6일 동안 정말 수고했어요!</p>
+      <button class="gift-btn" id="hongGift" type="button" hidden>🎁<span>선물 룰렛 돌리러 가기</span></button>
       <div class="coupon" id="hongCoupon" hidden>
-        <p class="k">보상 쿠폰</p>
+        <p class="k">선물 쿠폰</p>
         <p class="v" id="hongReward"></p>
         <p class="n">부모님께 이 화면을 보여 주세요</p>
       </div>

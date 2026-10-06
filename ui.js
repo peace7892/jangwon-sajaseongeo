@@ -134,9 +134,8 @@
   };
 
   // ---------- 공통 ----------
-  var VIEWS = ['name', 'home', 'card', 'quiz', 'sticker', 'chest', 'hong', 'parent'];
+  var VIEWS = ['name', 'home', 'card', 'quiz', 'sticker', 'prize', 'hong', 'parent'];
   var S = null;          // 진행 중인 공부·연습
-  var justStuck = 0;     // 방금 붙인 스티커 칸 (한 번만 움직임)
   function show(name) {
     VIEWS.forEach(function (v) { $('v-' + v).hidden = v !== name; });
     window.scrollTo(0, 0);
@@ -238,15 +237,22 @@
     renderBoard(t);
   }
 
+  function mainCount() { return state.stickers.filter(function (s) { return s.k !== 'review'; }).length; }
   function renderStart(t) {
-    var n = state.stickers.length, done = L.doneToday(state, t), act = L.activeSession(state, t);
-    if (!act && (n >= L.LAST_DAY || done)) {
+    var finished = mainCount() >= L.LAST_DAY, done = L.doneToday(state, t), act = L.activeSession(state, t);
+    var review = L.canReview(state, t);
+    if (!act && (finished || (done && !review))) {
       $('startBtn').hidden = true;
       $('doneBanner').hidden = false;
-      $('doneMain').textContent = n >= L.LAST_DAY ? L.LAST_DAY + '일을 모두 마쳤어요!' : '오늘 공부 끝!';
-      $('doneSub').textContent = n >= L.LAST_DAY
-        ? '대회 날까지 연습 문제로 복습해요.'
-        : '내일 또 만나요. 더 하고 싶으면 아래 연습 문제를 풀어요.';
+      if (finished) {
+        $('doneMain').textContent = L.LAST_DAY + '일을 모두 마쳤어요!';
+        $('doneSub').textContent = state.prize
+          ? '선물: ' + state.prize.item + ' · 대회 날까지 연습 문제로 복습해요.'
+          : '스티커판의 🎁를 눌러 선물 룰렛을 돌려요!';
+      } else {
+        $('doneMain').textContent = '오늘 두 번 다 했어요!';
+        $('doneSub').textContent = '내일 또 만나요. 더 하고 싶으면 아래 연습 문제를 풀어요.';
+      }
       return;
     }
     $('startBtn').hidden = false;
@@ -255,10 +261,17 @@
       var qTotal = act.steps.filter(isQ).length;
       var qDone = act.steps.slice(0, act.i).filter(isQ).length;
       var cardsLeft = act.steps.slice(act.i).filter(isCard).length;
-      $('startMain').textContent = act.kind === 'exam' ? '과거 시험 이어서 보기' : '이어서 하기';
+      $('startMain').textContent = act.kind === 'exam' ? '과거 시험 이어서 보기'
+        : act.kind === 'review' ? '두 번째 공부 이어서 하기' : '이어서 하기';
       $('startSub').textContent = cardsLeft
         ? '새 카드 ' + cardsLeft + '장 남았어요'
         : '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
+      return;
+    }
+    if (review) {
+      var rq = L.buildReview(state, t, D, Math.random).steps.length;
+      $('startMain').textContent = '두 번째 공부 시작';
+      $('startSub').textContent = '오늘 배운 카드 다시 쓰기 + 복습 · ' + rq + '문제';
       return;
     }
     if (L.isExamDay(state, t)) {
@@ -277,55 +290,65 @@
     $('startSub').textContent = parts.join(' · ');
   }
 
+  // 스티커판: 날마다 한 칸씩, 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날은 홍패와 🎁 선물
   var ROT = [-8, 6, -4, 9, -6, 5, -9];
-  function isChestDay(d) { return !!D.REWARDS[d] && d < L.LAST_DAY; }
+  var justStuckKey = '';
   function renderBoard(t) {
-    var board = $('board'), n = state.stickers.length, done = L.doneToday(state, t);
+    var board = $('board'), day = L.studyDay(state, t), done = L.doneToday(state, t), review = L.canReview(state, t);
     board.innerHTML = '';
-    $('boardCount').textContent = n + ' / ' + L.LAST_DAY + '일';
+    $('boardCount').textContent = state.stickers.length + ' / ' + (L.LAST_DAY * 2 - 1) + '칸';
     var cells = el('div', 'cells');
-    for (var d = 1; d <= L.LAST_DAY; d++) cells.appendChild(cellFor(d, n, done));
+    for (var d = 1; d <= L.LAST_DAY; d++) {
+      var col = el('div', 'daycol');
+      col.appendChild(el('span', 'daylbl', d + '일'));
+      col.appendChild(cellFor(d, 'main', !done && d === day));
+      col.appendChild(d === L.LAST_DAY ? giftCell() : cellFor(d, 'review', review && d === day));
+      cells.appendChild(col);
+    }
     board.appendChild(cells);
-    justStuck = 0;
+    justStuckKey = '';
   }
-  function cellFor(d, n, done) {
-    var sticker = state.stickers[d - 1];
-    var isChest = isChestDay(d), isFinal = d === L.LAST_DAY;
-    var chest = isChest ? L.chestState(state, d) : null;
-    var clickable = (isChest && chest !== 'locked') || (isFinal && !!state.exam);
-    var c = el(clickable ? 'button' : 'div', 'cell');
+  function cellFor(d, kind, isToday) {
+    var sticker = state.stickers.filter(function (s) { return (s.k === 'review') === (kind === 'review') && s.day === d; })[0];
+    var isFinal = kind === 'main' && d === L.LAST_DAY;
+    var clickable = isFinal && !!state.exam;
+    var c = el(clickable ? 'button' : 'div', 'cell' + (kind === 'review' ? ' rev' : ''));
     if (clickable) {
       c.type = 'button';
-      c.addEventListener('click', isFinal ? function () { showHong(false); } : function () { openChestView(d); });
+      c.addEventListener('click', function () { showHong(false); });
     }
     if (sticker) {
       c.classList.add('filled');
       var s = el('span', 'stk', sticker.e);
-      s.style.setProperty('--r', ROT[d % 7] + 'deg');
-      s.style.transform = 'rotate(' + ROT[d % 7] + 'deg)';
+      var r = ROT[(d * 2 + (kind === 'review' ? 1 : 0)) % 7];
+      s.style.setProperty('--r', r + 'deg');
+      s.style.transform = 'rotate(' + r + 'deg)';
       c.appendChild(s);
-      if (d === justStuck) c.classList.add('just-stuck');
-    } else if (isChest) {
-      c.classList.add('locked');
-      c.appendChild(el('span', 'stk', '🎁'));
+      if (justStuckKey === kind + d) c.classList.add('just-stuck');
     } else if (isFinal) {
       c.classList.add('locked');
       c.appendChild(el('span', 'stk', '📜'));
     } else {
-      c.textContent = !done && d === n + 1 ? '오늘' : String(d);
+      c.textContent = isToday ? '오늘' : kind === 'review' ? '복습' : '';
     }
-    if (!sticker && !done && d === n + 1) c.classList.add('today');
-    if (isChest) {
-      c.classList.add('chest');
-      if (chest === 'ready') c.classList.add('ready');
-      c.appendChild(el('span', 'tag', chest === 'ready' ? '열기!' : chest === 'opened' ? '열었음' : '보물'));
-    }
+    if (!sticker && isToday) c.classList.add('today');
     if (isFinal) {
       c.classList.add('final');
       c.appendChild(el('span', 'tag', '홍패'));
     }
-    var label = d + '일째' + (sticker ? ' 스티커' : '') + (isChest ? ' 보물상자' : '') + (isFinal ? ' 과거 시험' : '');
-    c.setAttribute('aria-label', label);
+    c.setAttribute('aria-label', d + '일째 ' + (kind === 'review' ? '두 번째 공부' : isFinal ? '과거 시험' : '첫 번째 공부') + (sticker ? ' 스티커' : ''));
+    return c;
+  }
+  function giftCell() {
+    var open = !!state.exam;
+    var c = el(open ? 'button' : 'div', 'cell gift' + (open ? (state.prize ? '' : ' ready') : ' locked'));
+    if (open) {
+      c.type = 'button';
+      c.addEventListener('click', showPrize);
+    }
+    c.appendChild(el('span', 'stk', '🎁'));
+    c.appendChild(el('span', 'tag', state.prize ? '받았음' : open ? '열기!' : '선물'));
+    c.setAttribute('aria-label', '선물 룰렛' + (open ? '' : ', 과거 시험을 마치면 열려요'));
     return c;
   }
 
@@ -364,8 +387,10 @@
   $('startBtn').addEventListener('click', function () {
     var t = today(), act = L.activeSession(state, t);
     if (act) { beginSession(act); return; }
-    if (L.doneToday(state, t)) { renderHome(); return; }
-    var built = L.buildSession(state, t, D, Math.random);
+    var built;
+    if (L.canReview(state, t)) built = L.buildReview(state, t, D, Math.random);
+    else if (!L.doneToday(state, t)) built = L.buildSession(state, t, D, Math.random);
+    else { renderHome(); return; }
     if (!built.steps.length) { renderHome(); return; }
     setState(L.startSession(state, built, t));
     beginSession(state.session);
@@ -400,6 +425,7 @@
     if (S.i + 1 < S.steps.length) return;
     var t = today();
     if (S.kind === 'exam') setState(L.endSession(L.recordExam(state, S.right, S.total, t)));
+    else if (S.kind === 'review') setState(L.endSession(L.finishReview(state, t)));
     else setState(L.endSession(L.finishDaily(state, t)));
   }
   function runStep() {
@@ -672,7 +698,6 @@
   function finish() {
     $('progressFill').style.width = '100%';
     if (S.kind === 'exam') {
-      justStuck = L.LAST_DAY;
       S = null;
       showHong(true);
       return;
@@ -681,17 +706,20 @@
     $('nextBtn').hidden = true;
     $('combo').hidden = true;
     $('qCount').textContent = '끝!';
-    $('resultTitle').textContent = S.kind === 'daily' ? '오늘의 공부 끝!' : '연습 끝!';
+    $('resultTitle').textContent = S.kind === 'daily' ? '오늘의 첫 번째 공부 끝!'
+      : S.kind === 'review' ? '두 번째 공부 끝!' : '연습 끝!';
     $('score').textContent = S.right + ' / ' + S.total;
     var gainedStars = L.totalStars(state) - S.starsBefore, gain = [];
     if (gainedStars > 0) gain.push('별 +' + gainedStars);
     if (S.newCards) gain.push('새 카드 ' + S.newCards + '장');
     $('resultGain').textContent = gain.join(' · ');
     $('resultGain').hidden = !gain.length;
-    var needSticker = S.kind === 'daily';
-    $('resultNote').textContent = needSticker
-      ? '오늘 칸에 ⭐ 스티커가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?'
-      : '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.';
+    var needSticker = S.kind === 'daily' || S.kind === 'review';
+    $('resultNote').textContent = !needSticker
+      ? '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.'
+      : S.kind === 'daily'
+        ? '⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부(복습)도 해요!'
+        : '오늘 두 번째 칸에도 ⭐가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?';
     $('resultNote').hidden = !$('resultNote').textContent;
     resultAction = needSticker ? 'sticker' : 'home';
     $('resultBtn').textContent = needSticker ? '스티커 고르러 가기' : '홈으로';
@@ -707,13 +735,13 @@
 
   // ---------- 스티커 ----------
   var chosenSticker = null;
+  function lastSticker() { return state.stickers[state.stickers.length - 1]; }
   function showSticker() {
-    var day = state.stickers.length;
+    var last = lastSticker();
     chosenSticker = null;
     $('stickerErr').textContent = '';
-    var sub = day + '일째 칸의 ⭐를 원하는 스티커로 바꿔요.';
-    if (isChestDay(day)) sub += ' 바꾸면 보물상자가 열려요!';
-    else if (day + 1 === L.LAST_DAY) sub += ' 다음은 과거 시험이에요!';
+    var sub = last.day + '일째 ' + (last.k === 'review' ? '아래' : '위') + ' 칸의 ⭐를 원하는 스티커로 바꿔요.';
+    if (last.k === 'review' && last.day + 1 === L.LAST_DAY) sub += ' 다음은 과거 시험이에요!';
     $('stickerSub').textContent = sub;
     var box = $('stickers');
     box.innerHTML = '';
@@ -734,69 +762,93 @@
   }
   $('stickBtn').addEventListener('click', function () {
     if (!chosenSticker) { $('stickerErr').textContent = '스티커를 먼저 골라 주세요.'; return; }
-    var day = state.stickers.length;
+    var last = lastSticker();
     setState(L.setTodaySticker(state, chosenSticker, today()));
-    justStuck = day;
+    justStuckKey = last.k + last.day;
     sfx.stamp(1);
-    if (isChestDay(day) && L.chestState(state, day) === 'ready') {
-      openChestView(day);
-      return;
-    }
     goHome();
-    var msg = day + '일째 스티커를 붙였어요!';
-    if (isChestDay(day + 1)) msg += ' 다음 칸은 보물상자예요.';
-    else if (day + 1 === L.LAST_DAY) msg += ' 다음은 과거 시험이에요!';
+    var msg = last.day + '일째 ' + (last.k === 'review' ? '두 번째' : '첫 번째') + ' 스티커를 붙였어요!';
+    if (last.k === 'main') msg += ' 조금 쉬었다가 두 번째 공부도 해요.';
+    else if (last.day + 1 === L.LAST_DAY) msg += ' 다음은 과거 시험이에요!';
     toast(msg);
   });
 
-  // ---------- 보물상자 ----------
-  var chestDay = 7, chestOpening = false;
-  function addCoupon(day) {
-    var slot = $('couponSlot');
+  // ---------- 선물 룰렛 ----------
+  var WHEEL_COLORS = ['#F2B53A', '#CFEDE6', '#FBE2DC', '#C9D3F0', '#7FCDBC'];
+  var SLICE = 360 / D.PRIZES.length;
+  var spinning = false;
+  function buildWheel() {
+    var wheel = $('wheel');
+    wheel.innerHTML = '';
+    wheel.style.background = 'conic-gradient(' + D.PRIZES.map(function (p, i) {
+      return WHEEL_COLORS[i % WHEEL_COLORS.length] + ' ' + (i * SLICE) + 'deg ' + ((i + 1) * SLICE) + 'deg';
+    }).join(', ') + ')';
+    D.PRIZES.forEach(function (p, i) {
+      var seg = el('div', 'seg');
+      seg.style.transform = 'rotate(' + (i * SLICE + SLICE / 2) + 'deg)';
+      seg.appendChild(el('span', null, p));
+      wheel.appendChild(seg);
+    });
+    wheel.appendChild(el('div', 'hub', '🎁'));
+  }
+  function showPrizeCoupon(fresh) {
+    var slot = $('prizeSlot');
     slot.innerHTML = '';
     var cp = el('div', 'coupon');
-    cp.appendChild(el('p', 'k', '보상 쿠폰'));
-    cp.appendChild(el('p', 'v', D.REWARDS[day]));
+    cp.appendChild(el('p', 'k', '선물 쿠폰'));
+    cp.appendChild(el('p', 'v', state.prize.item));
     cp.appendChild(el('p', 'n', '부모님께 이 화면을 보여 주세요'));
     slot.appendChild(cp);
+    $('spinBtn').hidden = true;
+    $('prizeHome').hidden = false;
+    $('prizeHint').textContent = fresh ? '축하해요!' : shortDate(state.prize.d) + '에 룰렛을 돌렸어요';
   }
-  function openChestView(day) {
-    var st = L.chestState(state, day);
-    if (st === 'locked') { toast(day + '번째 스티커를 붙이면 열 수 있어요.'); return; }
-    chestDay = day;
-    chestOpening = false;
-    $('couponSlot').innerHTML = '';
-    $('chestBtn').classList.remove('wiggle');
-    $('chestTitle').textContent = day + '일째 보물상자';
-    if (st === 'opened') {
-      $('chestBtn').hidden = true;
-      addCoupon(day);
-      $('chestHint').textContent = shortDate(state.chests[day]) + '에 열었어요';
-      $('chestHome').hidden = false;
+  function setWheel(deg, animate) {
+    var wheel = $('wheel');
+    wheel.classList.toggle('instant', !animate);
+    wheel.style.transform = 'rotate(' + deg + 'deg)';
+  }
+  function showPrize() {
+    if (!state.exam) { toast('과거 시험을 마치면 선물 룰렛을 돌릴 수 있어요.'); return; }
+    buildWheel();
+    spinning = false;
+    $('prizeSlot').innerHTML = '';
+    if (state.prize) {
+      setWheel(-(state.prize.i * SLICE + SLICE / 2), false);
+      showPrizeCoupon(false);
     } else {
-      $('chestBtn').hidden = false;
-      $('chestHint').textContent = '눌러서 열어 보세요';
-      $('chestHome').hidden = true;
+      setWheel(0, false);
+      $('spinBtn').hidden = false;
+      $('prizeHome').hidden = true;
+      $('prizeHint').textContent = '한 번만 돌릴 수 있어요. 무엇이 나올까요?';
     }
-    show('chest');
+    show('prize');
   }
-  $('chestBtn').addEventListener('click', function () {
-    if (chestOpening || L.chestState(state, chestDay) !== 'ready') return;
-    chestOpening = true;
-    var btn = $('chestBtn');
-    btn.classList.add('wiggle');
+  function spin() {
+    if (spinning || state.prize || !state.exam) return;
+    spinning = true;
+    // 결과를 먼저 저장해서, 돌리는 중에 화면을 닫아도 다시 돌릴 수 없게 한다
+    setState(L.pickPrize(state, D.PRIZES, Math.random, today()));
+    var jitter = (Math.random() - 0.5) * SLICE * 0.6;
+    var target = 360 * 6 - (state.prize.i * SLICE + SLICE / 2) + jitter;
+    $('spinBtn').hidden = true;
+    $('prizeHint').textContent = '빙글빙글…';
     sfx.rattle();
+    setTimeout(sfx.rattle, 1300);
+    setTimeout(sfx.rattle, 2700);
+    void $('wheel').offsetWidth;
+    setWheel(target, true);
     setTimeout(function () {
-      setState(L.openChest(state, chestDay, today()));
-      btn.hidden = true;
+      spinning = false;
       sfx.fanfare();
-      $('chestTitle').textContent = chestDay + '일 동안 정말 잘했어요!';
-      addCoupon(chestDay);
-      $('chestHint').textContent = '';
-      $('chestHome').hidden = false;
-      confetti($('chestStage'));
-    }, 900);
-  });
+      showPrizeCoupon(true);
+      confetti($('prizeStage'));
+    }, 4800);
+  }
+  $('spinBtn').addEventListener('click', spin);
+  $('wheel').addEventListener('click', spin);
+
+  $('hongGift').addEventListener('click', showPrize);
 
   // ---------- 홍패 ----------
   function showHong(fresh) {
@@ -806,9 +858,9 @@
     $('hongName').textContent = state.name;
     $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답';
     $('hongDate').textContent = longDate(e.d);
-    var reward = D.REWARDS[L.LAST_DAY];
-    $('hongCoupon').hidden = !reward;
-    $('hongReward').textContent = reward || '';
+    $('hongCoupon').hidden = !state.prize;
+    $('hongReward').textContent = state.prize ? state.prize.item : '';
+    $('hongGift').hidden = !!state.prize;
     show('hong');
     if (fresh) {
       sfx.fanfare();
