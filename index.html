@@ -255,6 +255,12 @@ p { margin: 0; }
 .confirm { background: var(--hwang-soft); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
 .confirm .field-row { justify-content: flex-start; }
 .help { color: var(--ink-soft); font-size: 0.95rem; }
+.slot-select { font: inherit; font-size: 1.05rem; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); max-width: 100%; }
+.mini-stickers { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+.mini-stickers button { aspect-ratio: 1; max-width: 100%; border: 2px solid var(--line); border-radius: 10px; background: var(--card); font-size: clamp(1.2rem, 4vw, 1.8rem); line-height: 1; padding: 0; }
+.mini-stickers button[aria-pressed="true"] { border-color: var(--cheong); background: var(--cheong-1); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 1rem; }
+.check input { width: 22px; height: 22px; }
 
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30; background: var(--ink); color: var(--white); border-radius: 14px; padding: 12px 18px; max-width: calc(100% - 32px); width: max-content; text-align: center; animation: pop 0.35s; }
 
@@ -277,6 +283,7 @@ p { margin: 0; }
       <p class="eyebrow">장원급제 사자성어</p>
       <h1>서당에 온 걸 환영해요!</h1>
       <p>6일 동안 사자성어 43개를 익히고 장원급제에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <p class="warn" id="nameStorageWarn" hidden></p>
       <div class="warn" id="nameInAppWarn" hidden>
         <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열어 주세요.</p>
         <button class="plain-btn open-safari" type="button" hidden>Safari로 열기</button>
@@ -302,7 +309,7 @@ p { margin: 0; }
     <p class="dday" id="dday" hidden></p>
     <div class="ranks" id="ranks" aria-label="칭호 단계"></div>
     <p class="rank-next" id="rankNext"></p>
-    <p class="warn" id="storageWarn" hidden>이 아이패드에 기록이 저장되지 않고 있어요. 개인정보 보호 브라우징(검은 주소창)을 끄고 다시 열어 주세요.</p>
+    <p class="warn" id="storageWarn" hidden></p>
     <div class="warn" id="inAppWarn" hidden>
       <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열고, Safari 즐겨찾기로만 들어와 주세요.</p>
       <button class="plain-btn open-safari" type="button" hidden>Safari로 열기</button>
@@ -431,6 +438,15 @@ p { margin: 0; }
       <p class="help">누르면 효과음이 나요. 안 들리면 아이패드 볼륨을 올려 보고, 그래도 안 들리면 아래에 나오는 문구를 Claude에게 알려 주세요.</p>
       <button class="plain-btn" id="pSoundBtn" type="button" style="justify-self:start">소리 확인</button>
       <p class="msg" id="pSoundMsg" aria-live="polite"></p>
+    </div>
+    <div class="panel">
+      <h2>스티커 되돌려 주기</h2>
+      <p class="help">공부했는데 스티커가 사라졌다면, 확인하신 만큼 여기서 다시 붙여 줄 수 있어요. 앞 칸부터 하나씩 붙여요. 첫 번째 공부 칸을 붙이면 다음 공부는 그다음 날 계획으로 넘어가고, 놓친 새 카드는 다음 공부에서 다시 익혀요.</p>
+      <select class="slot-select" id="pSlot" aria-label="붙일 칸"></select>
+      <div class="mini-stickers" id="pStickers" aria-label="스티커 모양"></div>
+      <label class="check"><input type="checkbox" id="pToday"> 오늘 한 공부예요</label>
+      <button class="plain-btn" id="pStickerBtn" type="button" style="justify-self:start">스티커 붙이기</button>
+      <p class="msg" id="pStickerMsg" aria-live="polite"></p>
     </div>
     <div class="panel">
       <h2>기록 백업</h2>

@@ -43,13 +43,38 @@
   var IS_KAKAO = /KAKAOTALK/i.test(navigator.userAgent || '');
   // 브라우저에게 이 사이트 기록을 오래 보관해 달라고 요청한다 (지원하는 브라우저만)
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () { /* 거절돼도 평소처럼 저장된다 */ }); } catch (e) { /* 미지원 */ }
-  var storageOk = true;
+  // 시작할 때 이 브라우저가 기록을 저장할 수 있는지 시험한다. Safari의 '모든 쿠키 차단'이 켜져 있으면
+  // 기록 저장이 막혀서 새로고침할 때마다 이름부터 다시 시작된다.
+  var storageError = '', recoveredFromTab = false, lastRaw = null;
+  try {
+    localStorage.setItem(KEY + '-test', '1');
+    if (localStorage.getItem(KEY + '-test') !== '1') storageError = '읽기 실패';
+    localStorage.removeItem(KEY + '-test');
+  } catch (e) {
+    storageError = (e && e.name) || '알 수 없음';
+  }
+  if (!storageError && navigator.cookieEnabled === false) storageError = '쿠키 차단';
+  // 이 탭 안의 복사본(sessionStorage). 새로고침했는데 브라우저가 기록을 지웠으면 이것으로 되살린다
+  function tabCopy(raw) {
+    try {
+      if (raw === undefined) return sessionStorage.getItem(KEY + '-tab');
+      sessionStorage.setItem(KEY + '-tab', raw);
+    } catch (e) { /* 이 탭 복사본도 막혀 있으면 위의 안내로 알린다 */ }
+    return null;
+  }
+  function parseState(raw) {
+    try { return L.sanitize(JSON.parse(raw)); } catch (e) { return null; }
+  }
   function load() {
     var raw = null;
-    try { raw = localStorage.getItem(KEY); } catch (e) { storageOk = false; return L.emptyState(); }
-    if (!raw) return L.emptyState();
-    var parsed = null;
-    try { parsed = L.sanitize(JSON.parse(raw)); } catch (e) { parsed = null; }
+    try { raw = localStorage.getItem(KEY); } catch (e) { if (!storageError) storageError = (e && e.name) || '읽기 실패'; }
+    if (!raw) {
+      var copy = tabCopy(), fromTab = copy && parseState(copy);
+      if (fromTab && fromTab.name) { recoveredFromTab = true; return fromTab; }
+      return L.emptyState();
+    }
+    lastRaw = raw;
+    var parsed = parseState(raw);
     if (!parsed) {
       try { localStorage.setItem(KEY + '-broken', raw); } catch (e) { /* 저장 불가는 아래 안내로 알린다 */ }
       return L.emptyState();
@@ -57,8 +82,35 @@
     return parsed;
   }
   var state = load();
+  if (recoveredFromTab) save();
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(state)); storageOk = true; } catch (e) { storageOk = false; }
+    var raw = JSON.stringify(state);
+    tabCopy(raw);
+    try {
+      localStorage.setItem(KEY, raw);
+      lastRaw = raw;
+    } catch (e) {
+      if (!storageError) storageError = (e && e.name) || '저장 실패';
+    }
+  }
+  // 다른 탭(또는 예전에 열어 둔 탭)이 그사이 기록을 바꿨으면, 오래된 기록으로 덮어쓰지 않도록 새 기록을 불러온다
+  function syncFromStorage() {
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch (e) { return false; }
+    if (!raw || raw === lastRaw) return false;
+    var parsed = parseState(raw);
+    if (!parsed) return false;
+    state = parsed;
+    lastRaw = raw;
+    tabCopy(raw);
+    return true;
+  }
+  function storageWarnText() {
+    var how = '부모님이 아이패드 설정 → 앱 → Safari(아이패드OS 17 이하는 설정 → Safari)에서 ‘모든 쿠키 차단’을 꺼 주세요. ' +
+      '검은 주소창(개인정보 보호 브라우징)이면 일반 탭으로 열고, 아이패드 저장 공간이 꽉 차 있지 않은지도 확인해 주세요.';
+    if (storageError) return '이 아이패드의 Safari가 기록 저장을 막고 있어요. 그래서 새로고침하면 이름부터 다시 시작돼요. ' + how + ' (원인: ' + storageError + ')';
+    if (recoveredFromTab) return '새로고침할 때 이 아이패드가 기록을 지웠어요. 이번에는 되살렸지만 Safari를 닫으면 사라질 수 있어요. ' + how;
+    return '';
   }
   function setState(next) {
     if (next === state) return;
@@ -72,22 +124,58 @@
   }
 
   // ---------- 소리 ----------
-  // 효과음을 WAV로 만들어 일반 오디오로 재생한다. 아이패드는 오디오마다 첫 터치 때 한 번 "깨워야" 나중에 재생할 수 있어서,
-  // 첫 터치에 모든 효과음을 소리 없이 한 번씩 재생해 둔다.
-  var players = {}, unlocked = false, lastPlay = null;
+  // 효과음은 WAV로 만들어 data: 주소로 일반 오디오(<audio>)에 넣는다. 아이패드 Safari는 blob: 주소 오디오를
+  // NotSupportedError로 거절해서 data: 주소를 쓴다. 그래도 일반 오디오가 안 되면 Web Audio로 재생한다.
+  // 아이패드는 오디오를 첫 터치 때 한 번 "깨워야" 나중에 재생할 수 있어서, 두 방식 모두 첫 터치 때 깨워 둔다.
+  var players = {}, unlocked = false, lastPlay = null, useWebAudio = false, ac = null, buffers = {};
+  function clipSamples(name) { return window.Sound.renderClip(window.Sound.CLIPS[name], window.Sound.RATE); }
+  function wavDataURL(bytes) {
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
   function player(name) {
     if (!players[name]) {
-      var bytes = window.Sound.encodeWav(window.Sound.renderClip(window.Sound.CLIPS[name], window.Sound.RATE), window.Sound.RATE);
-      var a = new Audio(URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' })));
+      var a = new Audio();
       a.preload = 'auto';
+      a.src = wavDataURL(window.Sound.encodeWav(clipSamples(name), window.Sound.RATE));
       a.addEventListener('ended', function () { a.busy = false; });
       players[name] = a;
     }
     return players[name];
   }
+  function audioContext() {
+    if (!ac) {
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* 미지원 */ }
+      try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; }
+    }
+    if (ac.state !== 'running' && ac.resume) ac.resume().catch(function () { /* 다음 터치에서 다시 시도 */ });
+    return ac;
+  }
+  function webAudioPlay(name) {
+    var c = audioContext();
+    if (!c) return false;
+    try {
+      if (!buffers[name]) {
+        var s = clipSamples(name), b = c.createBuffer(1, s.length, window.Sound.RATE);
+        b.getChannelData(0).set(s);
+        buffers[name] = b;
+      }
+      var src = c.createBufferSource();
+      src.buffer = buffers[name];
+      src.connect(c.destination);
+      src.start();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function unlockAudio() {
     if (unlocked) return;
     unlocked = true;
+    audioContext();   // 대신 쓸 Web Audio도 이 터치 안에서 깨워 둔다
+    var probe = document.createElement('audio');
+    if (!probe.canPlayType || !probe.canPlayType('audio/wav')) { useWebAudio = true; return; }
     Object.keys(window.Sound.CLIPS).forEach(function (name) {
       var a = player(name);
       if (a.busy) return;
@@ -97,31 +185,52 @@
         a.muted = false;
       };
       var p = a.play();
-      if (p && p.then) p.then(settle, function () { a.muted = false; unlocked = false; });
-      else settle();
+      if (p && p.then) {
+        p.then(settle, function (err) {
+          a.muted = false;
+          if (err && err.name === 'NotSupportedError') useWebAudio = true;
+          else unlocked = false;
+        });
+      } else {
+        settle();
+      }
     });
   }
   document.addEventListener('touchend', unlockAudio, true);
   document.addEventListener('click', unlockAudio, true);
   function playClip(name) {
     if (!state.sound) return;
+    if (useWebAudio) {
+      var ok = webAudioPlay(name);
+      lastPlay = { ok: ok, via: 2, why: ok ? '' : 'Web Audio' };
+      return;
+    }
     var a = player(name);
     a.busy = true;
     a.muted = false;
     try { a.currentTime = 0; } catch (e) { /* 아직 불러오는 중이면 처음부터 재생된다 */ }
     var p = a.play();
     if (p && p.then) {
-      p.then(function () { lastPlay = { ok: true }; }, function (err) {
+      p.then(function () { lastPlay = { ok: true, via: 1 }; }, function (err) {
         a.busy = false;
-        lastPlay = { ok: false, why: (err && err.name) || '알 수 없음' };
+        var why = (err && err.name) || '알 수 없음';
+        if (why === 'NotSupportedError') {
+          useWebAudio = true;
+          var ok2 = webAudioPlay(name);
+          lastPlay = { ok: ok2, via: 2, why: ok2 ? '' : why };
+        } else {
+          lastPlay = { ok: false, via: 1, why: why };
+        }
       });
     }
   }
   function soundStatus() {
     if (!state.sound) return '앱 소리가 꺼져 있어요. 홈 화면 오른쪽 위 “소리 끔”을 눌러 켜 주세요.';
     if (!lastPlay) return '소리를 아직 재생하지 못했어요. 한 번 더 눌러 주세요.';
-    if (lastPlay.ok) return '소리를 재생했어요. 그래도 안 들리면 아이패드 볼륨 버튼으로 소리를 키워 주세요.';
-    return '소리 재생이 막혔어요 (' + lastPlay.why + '). 이 문구를 Claude에게 알려 주세요.';
+    if (lastPlay.ok) {
+      return '소리를 재생했어요 (방식 ' + lastPlay.via + '). 그래도 안 들리면 아이패드 볼륨 버튼으로 소리를 키우고, 무음 모드가 아닌지 확인해 주세요.';
+    }
+    return '소리 재생이 막혔어요 (' + lastPlay.why + ', 방식 ' + lastPlay.via + '). 이 문구를 Claude에게 알려 주세요.';
   }
   var sfx = {
     stamp: function (combo) { playClip(combo >= 2 ? 'combo' : 'stamp'); },
@@ -140,8 +249,16 @@
     VIEWS.forEach(function (v) { $('v-' + v).hidden = v !== name; });
     window.scrollTo(0, 0);
   }
+  function renderStorageWarn() {
+    var text = storageWarnText();
+    ['storageWarn', 'nameStorageWarn'].forEach(function (id) {
+      $(id).textContent = text;
+      $(id).hidden = !text;
+    });
+  }
   function goHome() {
     S = null;
+    renderStorageWarn();
     if (!state.name) { show('name'); return; }
     renderHome();
     show('home');
@@ -150,7 +267,19 @@
     if (e.target.closest('[data-go="home"]')) goHome();
   });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && !S && !$('v-home').hidden) renderHome();
+    if (document.hidden) return;
+    if (syncFromStorage()) {
+      if (S) toast('다른 창에서 한 공부를 불러왔어요.');
+      goHome();
+    } else if (!S && !$('v-home').hidden) {
+      renderHome();
+    }
+  });
+  window.addEventListener('storage', function (e) {
+    if (e.key === KEY && !document.hidden && syncFromStorage()) goHome();
+  });
+  window.addEventListener('pageshow', function (e) {
+    if (e.persisted && syncFromStorage()) goHome();
   });
   function toast(msg) {
     var old = document.querySelector('.toast');
@@ -224,7 +353,7 @@
     } else {
       next.textContent = '모든 카드를 외웠어요. 장원이에요!';
     }
-    $('storageWarn').hidden = storageOk;
+    renderStorageWarn();
     $('inAppWarn').hidden = !IN_APP;
     var left = L.daysUntil(t, D.EXAM_DATE);
     $('dday').hidden = left < 0;
@@ -882,9 +1011,57 @@
     $('pReset').value = '';
     $('pRestoreConfirm').hidden = true;
     pendingRestore = null;
-    ['pNameMsg', 'pSoundMsg', 'pCopyMsg', 'pRestoreMsg', 'pResetMsg'].forEach(function (id) { msg(id, ''); });
+    ['pNameMsg', 'pSoundMsg', 'pStickerMsg', 'pCopyMsg', 'pRestoreMsg', 'pResetMsg'].forEach(function (id) { msg(id, ''); });
+    $('pToday').checked = false;
+    renderStickerRestore();
     show('parent');
   }
+
+  // 스티커 되돌려 주기: 공부한 걸 부모님이 확인했는데 스티커가 사라졌을 때, 앞 칸부터 순서대로 다시 붙인다
+  var restoreEmoji = '🌸';
+  function renderStickerRestore() {
+    var sel = $('pSlot'), slots = L.restorableSlots(state, today());
+    sel.innerHTML = '';
+    slots.forEach(function (s) {
+      var o = el('option', null, s.day + '일째 ' + (s.kind === 'main' ? '위 칸 (첫 번째 공부)' : '아래 칸 (두 번째 공부·복습)'));
+      o.value = s.kind + ':' + s.day;
+      sel.appendChild(o);
+    });
+    var mainAt = slots.map(function (s) { return s.kind; }).indexOf('main');
+    if (mainAt >= 0) sel.selectedIndex = mainAt;
+    sel.disabled = !slots.length;
+    $('pStickerBtn').hidden = !slots.length;
+    if (!slots.length) msg('pStickerMsg', '되돌릴 칸이 없어요.');
+    var box = $('pStickers');
+    box.innerHTML = '';
+    D.STICKERS.forEach(function (e) {
+      var b = el('button', null, e);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(e === restoreEmoji));
+      b.setAttribute('aria-label', e + ' 스티커');
+      b.addEventListener('click', function () {
+        restoreEmoji = e;
+        box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      });
+      box.appendChild(b);
+    });
+  }
+  $('pStickerBtn').addEventListener('click', function () {
+    var v = $('pSlot').value;
+    if (!v) return;
+    var kind = v.split(':')[0], day = Number(v.split(':')[1]), t = today();
+    var date = $('pToday').checked ? t : L.addDays(t, -1);
+    var next = L.restoreSticker(state, kind, day, restoreEmoji, date, t);
+    if (next === state) {
+      msg('pStickerMsg', '오늘 한 같은 공부 스티커가 이미 있어요. “오늘 한 공부예요”를 끄고 붙여 주세요.', 'bad');
+      return;
+    }
+    setState(next);
+    $('pCode').value = L.encodeBackup(state);
+    var done = day + '일째 ' + (kind === 'main' ? '위' : '아래') + ' 칸에 ' + restoreEmoji + ' 스티커를 붙였어요.';
+    renderStickerRestore();
+    msg('pStickerMsg', done, 'ok');
+  });
   $('pSoundBtn').addEventListener('click', function () {
     sfx.fanfare();
     msg('pSoundMsg', '확인하는 중이에요');

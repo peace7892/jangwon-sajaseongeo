@@ -281,6 +281,23 @@
     next.exam = { score: score, total: total, d: today };
     return next;
   }
+  // 부모님이 사라진 스티커를 되돌려 붙일 수 있는 칸: 다음 첫 번째 공부 칸 하나 + 비어 있는 두 번째 공부 칸들
+  function restorableSlots(state, today) {
+    var n = mains(state).length, slots = [];
+    for (var d = 1; d <= n && d < LAST_DAY; d++) {
+      if (!state.stickers.some(function (s) { return s.k === 'review' && s.day === d; })) slots.push({ kind: 'review', day: d });
+    }
+    if (n + 1 < LAST_DAY) slots.push({ kind: 'main', day: n + 1 });
+    return slots;
+  }
+  function restoreSticker(state, kind, day, emoji, date, today) {
+    var ok = restorableSlots(state, today).some(function (s) { return s.kind === kind && s.day === day; });
+    if (!ok || !DATE_RE.test(date)) return state;
+    if (date === today && (kind === 'main' ? doneToday(state, today) : reviewDoneToday(state, today))) return state;
+    var next = clone(state);
+    next.stickers.push({ d: date, e: emoji, k: kind, day: day });
+    return next;
+  }
   // 과거 시험을 마친 뒤 선물 룰렛을 한 번만 돌린다
   function pickPrize(state, prizes, rng, today) {
     if (state.prize || !state.exam) return state;
@@ -388,6 +405,7 @@
     studyDay: studyDay, isExamDay: isExamDay, addSticker: addSticker,
     finishDaily: finishDaily, finishReview: finishReview, setTodaySticker: setTodaySticker,
     examTitle: examTitle, recordExam: recordExam, pickPrize: pickPrize,
+    restorableSlots: restorableSlots, restoreSticker: restoreSticker,
     emptyState: emptyState, sanitize: sanitize, encodeBackup: encodeBackup, decodeBackup: decodeBackup
   };
   if (typeof module === 'object' && module.exports) module.exports = Logic;
