@@ -254,8 +254,8 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
     } catch (e) { done('막힘 · ' + err(e)); }
   }
   var TESTS = [
-    { key: '1 기준음 (AAC 파일, 1초)', play: function (done) { playElement('sounds/tone.m4a', done); } },
-    { key: '2 앱 효과음 (AAC 파일)', play: function (done) { playElement('sounds/fanfare.m4a', done); } },
+    { key: '1 기준음 (AAC 파일, 1초)', play: function (done) { playElement('sounds/tone.m4a?v=' + Date.now(), done); } },
+    { key: '2 앱 효과음 (AAC 파일)', play: function (done) { playElement('sounds/fanfare.m4a?v=' + Date.now(), done); } },
     { key: '3 WAV 시험음 (1초)', play: function (done) { playElement(toneWav(1), done); } },
     { key: '4 Web Audio 시험음 (1초)', play: playWebAudio }
   ];

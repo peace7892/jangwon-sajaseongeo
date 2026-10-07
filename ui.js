@@ -143,7 +143,7 @@
     if (!bag[name]) {
       var a = new Audio();
       a.preload = 'auto';
-      a.src = kind === 'aac' ? 'sounds/' + name + '.m4a' : wavDataURL(window.Sound.encodeWav(clipSamples(name), window.Sound.RATE));
+      a.src = kind === 'aac' ? 'sounds/' + name + '.m4a?v=' + APP_VERSION : wavDataURL(window.Sound.encodeWav(clipSamples(name), window.Sound.RATE));
       a.addEventListener('ended', function () { a.busy = false; });
       bag[name] = a;
     }
