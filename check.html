@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>장원급제 점검</title>
+<style>
+/* 부모님이 아이패드에서 한 번 여는 점검 페이지. 앱과 같은 색, 한 줄 흐름 */
+:root {
+  --paper: #F2F7F5; --card: #FFFFFF; --ink: #1B2430; --ink-soft: #56606E; --line: #D6E2DE;
+  --cheong: #13806F; --cheong-1: #CFEDE6; --ju: #D63C2A; --ju-soft: #FBE2DC; --white: #FFFFFF;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); font-family: -apple-system, "Apple SD Gothic Neo", sans-serif; font-size: 17px; line-height: 1.6; }
+.wrap { max-width: 720px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 14px; }
+h1 { font-size: 1.6rem; margin: 0; }
+h2 { font-size: 1.15rem; margin: 0 0 6px; }
+p { margin: 0; }
+.card { background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 8px; min-width: 0; }
+ol { margin: 0; padding-left: 1.3em; }
+.row { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 6px; font-size: 0.95rem; }
+.row:first-of-type { border-top: 0; }
+.row b { font-weight: 600; white-space: nowrap; }
+.row span { text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.ok { color: var(--cheong); }
+.bad { color: var(--ju); }
+button { font: inherit; font-size: 1.05rem; border: 0; border-radius: 12px; padding: 12px 18px; background: var(--cheong); color: var(--white); cursor: pointer; touch-action: manipulation; }
+button.sub { background: var(--card); color: var(--cheong); border: 2px solid var(--line); }
+button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, monospace; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
+.big { font-size: 2rem; font-weight: 700; color: var(--cheong); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>장원급제 점검</h1>
+  <div class="card">
+    <h2>하는 방법 (1분)</h2>
+    <ol>
+      <li>앱을 여는 것과 같은 방법(같은 Safari 즐겨찾기 등)으로 이 페이지를 열어요.</li>
+      <li>Safari 주소창 옆 <b>새로고침</b>을 한 번 눌러요.</li>
+      <li>아래 <b>소리 시험</b> 버튼을 눌러요.</li>
+      <li>맨 아래 <b>결과 복사</b>를 눌러 Claude에게 붙여 넣어 주세요. 복사가 안 되면 화면을 캡처해 주세요.</li>
+      <li>잘 되는 아이패드에서도 한 번 해 주시면 두 대를 비교할 수 있어요.</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>새로고침해도 남는지</h2>
+    <p>이 페이지를 연 횟수예요. 새로고침했는데 숫자가 <b>1</b>로 돌아가는 곳은 저장이 지워지는 곳이에요.</p>
+    <div id="persist"></div>
+  </div>
+
+  <div class="card">
+    <h2>소리 시험</h2>
+    <button id="soundBtn" type="button">소리 시험</button>
+    <div id="sound"></div>
+  </div>
+
+  <div class="card">
+    <h2>앱 기록</h2>
+    <div id="app"></div>
+  </div>
+
+  <div class="card">
+    <h2>아이패드와 브라우저</h2>
+    <div id="device"></div>
+  </div>
+
+  <div class="card">
+    <h2>결과</h2>
+    <button id="copyBtn" type="button">결과 복사</button>
+    <p id="copyMsg" aria-live="polite"></p>
+    <textarea id="out" readonly aria-label="점검 결과"></textarea>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var KEY = 'jangwon-sajaseongeo-v1';
+  var results = {};   // 이름 → 값 (복사용)
+  function $(id) { return document.getElementById(id); }
+  function row(box, label, value, good) {
+    var r = document.createElement('div');
+    r.className = 'row';
+    var b = document.createElement('b'); b.textContent = label;
+    var s = document.createElement('span'); s.textContent = value;
+    if (good === true) s.className = 'ok';
+    if (good === false) s.className = 'bad';
+    r.appendChild(b); r.appendChild(s);
+    $(box).appendChild(r);
+    results[box + ' · ' + label] = value;
+    renderOut();
+  }
+  function err(e) { return (e && e.name ? e.name : '오류') + (e && e.message ? ': ' + e.message : ''); }
+  function renderOut() {
+    $('out').value = Object.keys(results).map(function (k) { return k + ' = ' + results[k]; }).join('\n');
+  }
+
+  // ---------- 새로고침해도 남는지 (저장 방식 네 가지) ----------
+  function bump(get, set) {
+    var n = Number(get() || 0) + 1;
+    set(String(n));
+    return Number(get());
+  }
+  try {
+    var ls = bump(function () { return localStorage.getItem('jw-check-count'); }, function (v) { localStorage.setItem('jw-check-count', v); });
+    row('persist', 'localStorage (앱이 쓰는 곳)', ls + '번째', ls > 1);
+  } catch (e) { row('persist', 'localStorage (앱이 쓰는 곳)', '막힘 · ' + err(e), false); }
+  try {
+    var ss = bump(function () { return sessionStorage.getItem('jw-check-count'); }, function (v) { sessionStorage.setItem('jw-check-count', v); });
+    row('persist', 'sessionStorage (탭 복사본)', ss + '번째', ss > 1);
+  } catch (e) { row('persist', 'sessionStorage (탭 복사본)', '막힘 · ' + err(e), false); }
+  try {
+    var m = document.cookie.match(/(?:^|; )jwcheck=(\d+)/);
+    var c = (m ? Number(m[1]) : 0) + 1;
+    document.cookie = 'jwcheck=' + c + '; max-age=31536000; path=/; SameSite=Lax';
+    var back = document.cookie.match(/(?:^|; )jwcheck=(\d+)/);
+    row('persist', '쿠키', back ? back[1] + '번째' : '저장 안 됨', back ? Number(back[1]) > 1 : false);
+  } catch (e) { row('persist', '쿠키', '막힘 · ' + err(e), false); }
+  try {
+    var req = indexedDB.open('jw-check', 1);
+    req.onupgradeneeded = function () { req.result.createObjectStore('kv'); };
+    req.onerror = function () { row('persist', 'IndexedDB', '막힘 · ' + err(req.error), false); };
+    req.onsuccess = function () {
+      try {
+        var db = req.result, tx = db.transaction('kv', 'readwrite'), st = tx.objectStore('kv'), g = st.get('count');
+        g.onsuccess = function () {
+          var n = (g.result || 0) + 1;
+          st.put(n, 'count');
+          tx.oncomplete = function () { row('persist', 'IndexedDB', n + '번째', n > 1); };
+        };
+        tx.onerror = function () { row('persist', 'IndexedDB', '막힘 · ' + err(tx.error), false); };
+      } catch (e) { row('persist', 'IndexedDB', '막힘 · ' + err(e), false); }
+    };
+  } catch (e) { row('persist', 'IndexedDB', '막힘 · ' + err(e), false); }
+  try {
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(function (est) {
+        row('persist', '저장 공간', '사용 ' + Math.round((est.usage || 0) / 1024) + 'KB / 한도 ' + Math.round((est.quota || 0) / 1048576) + 'MB', (est.quota || 0) > 1048576);
+      }, function (e) { row('persist', '저장 공간', '확인 안 됨 · ' + err(e)); });
+    } else {
+      row('persist', '저장 공간', '확인 기능 없음');
+    }
+    if (navigator.storage && navigator.storage.persisted) {
+      navigator.storage.persisted().then(function (p) { row('persist', '오래 보관 허용', p ? '예' : '아니요'); }, function () {});
+    }
+  } catch (e) { row('persist', '저장 공간', '확인 안 됨 · ' + err(e)); }
+
+  // ---------- 앱 기록 ----------
+  try {
+    var raw = localStorage.getItem(KEY);
+    if (!raw) {
+      row('app', '앱 기록', '없음', false);
+    } else {
+      var st0 = null;
+      try { st0 = JSON.parse(raw); } catch (e) { row('app', '앱 기록', '읽을 수 없음 · ' + err(e), false); }
+      if (st0) {
+        row('app', '이름', st0.name || '(없음)', !!st0.name);
+        row('app', '스티커', String((st0.stickers || []).length) + '장');
+        row('app', '카드', String(Object.keys(st0.cards || {}).length) + '장');
+        row('app', '기록 크기', Math.round(raw.length / 1024 * 10) / 10 + 'KB');
+      }
+    }
+    row('app', '망가진 기록 보관본', localStorage.getItem(KEY + '-broken') ? '있음' : '없음');
+    row('app', '탭 복사본', sessionStorage.getItem(KEY + '-tab') ? '있음' : '없음');
+  } catch (e) { row('app', '앱 기록', '읽기 막힘 · ' + err(e), false); }
+  try {
+    var x = new XMLHttpRequest();
+    x.open('GET', 'ui.js?v=' + Date.now());
+    x.onload = function () {
+      var mm = /APP_VERSION = '([^']+)'/.exec(x.responseText || '');
+      row('app', '서버의 앱 버전', mm ? mm[1] : '알 수 없음');
+    };
+    x.send();
+  } catch (e) { /* 버전 확인은 참고용 */ }
+
+  // ---------- 아이패드와 브라우저 ----------
+  var ua = navigator.userAgent || '';
+  var os = /OS (\d+)_(\d+)/.exec(ua);
+  row('device', 'iPadOS/iOS', os ? os[1] + '.' + os[2] : (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1 ? '아이패드(데스크톱 모드)' : '알 수 없음'));
+  var sv = /Version\/([\d.]+)/.exec(ua);
+  row('device', 'Safari 버전', sv ? sv[1] : '알 수 없음');
+  var inApp = /KAKAOTALK|NAVER|Whale|CriOS|FxiOS|EdgiOS|Line\/|Instagram|FBAN|FBAV|DaumApps/.exec(ua);
+  // Safari 앱은 "Version/숫자 ... Safari/" 가 있다. 자녀 보호 앱 같은 다른 앱 안의 브라우저는 보통 없다
+  var looksSafari = /Version\/[\d.]+.*Safari\//.test(ua);
+  row('device', '브라우저', inApp ? inApp[0] + ' 앱' : looksSafari ? 'Safari' : 'Safari가 아닌 다른 앱의 브라우저 같아요', !inApp && looksSafari);
+  row('device', '홈 화면 아이콘으로 열림', navigator.standalone ? '예' : '아니요');
+  row('device', '쿠키 허용', navigator.cookieEnabled ? '예' : '아니요', navigator.cookieEnabled);
+  var missing = [];
+  if (typeof WebAssembly === 'undefined') missing.push('WebAssembly');
+  if (!(window.AudioContext || window.webkitAudioContext)) missing.push('Web Audio');
+  if (typeof indexedDB === 'undefined') missing.push('IndexedDB');
+  try { if (!document.createElement('canvas').getContext('webgl')) missing.push('WebGL'); } catch (e) { missing.push('WebGL'); }
+  if (typeof RTCPeerConnection === 'undefined') missing.push('WebRTC');
+  row('device', '꺼진 기능', missing.length ? missing.join(', ') : '없음', missing.length === 0);
+  // 차단 모드는 WebAssembly·Web Audio·WebGL을 끈다
+  if (missing.indexOf('WebAssembly') >= 0 && missing.indexOf('Web Audio') >= 0) {
+    row('device', '추측', '차단 모드(Lockdown Mode)가 켜져 있어요', false);
+  }
+  row('device', '전체 정보', ua);
+
+  // ---------- 소리 시험 ----------
+  function beepWav() {
+    var rate = 22050, n = Math.round(rate * 0.3), bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
+    function t(o, s) { for (var i = 0; i < s.length; i++) bytes[o + i] = s.charCodeAt(i); }
+    t(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); t(8, 'WAVE'); t(12, 'fmt ');
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    t(36, 'data'); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 880 * i / rate) * 12000 * Math.exp(-6 * i / n)), true);
+    var bin = '';
+    for (var j = 0; j < bytes.length; j += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(j, j + 0x8000));
+    return 'data:audio/wav;base64,' + btoa(bin);
+  }
+  var soundDone = false;
+  $('soundBtn').addEventListener('click', function () {
+    if (soundDone) return;
+    soundDone = true;
+    var probe = document.createElement('audio');
+    row('sound', 'AAC 지원', probe.canPlayType ? (probe.canPlayType('audio/mp4') || '없음') : '알 수 없음');
+    row('sound', 'WAV 지원', probe.canPlayType ? (probe.canPlayType('audio/wav') || '없음') : '알 수 없음');
+    row('sound', 'MP3 지원', probe.canPlayType ? (probe.canPlayType('audio/mpeg') || '없음') : '알 수 없음');
+    function tryAudio(label, src, delay) {
+      setTimeout(function () {
+        try {
+          var a = new Audio(src);
+          a.onerror = function () { row('sound', label + ' 불러오기', '실패 · 코드 ' + (a.error ? a.error.code : '?'), false); };
+          var p = a.play();
+          if (p && p.then) p.then(function () { row('sound', label, '재생됨', true); },
+            function (e) { row('sound', label, '막힘 · ' + err(e), false); });
+          else row('sound', label, '재생 요청함');
+        } catch (e) { row('sound', label, '막힘 · ' + err(e), false); }
+      }, delay);
+    }
+    // 방식 1: AAC 파일, 방식 2: WAV(data 주소) — 앱과 같은 순서
+    tryAudio('방식 1 (AAC 파일)', 'sounds/stamp.m4a', 0);
+    tryAudio('방식 2 (WAV)', beepWav(), 0);
+    // 방식 3: Web Audio
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { row('sound', '방식 3 (Web Audio)', '없음 (꺼져 있음)', false); return; }
+      var ctx = new AC();
+      if (ctx.resume) ctx.resume();
+      row('sound', 'Web Audio 샘플레이트', String(ctx.sampleRate));
+      try {
+        var b1 = ctx.createBuffer(1, 2205, 22050);
+        row('sound', '버퍼 22050Hz', '만들어짐', true);
+        void b1;
+      } catch (e) { row('sound', '버퍼 22050Hz', '막힘 · ' + err(e), false); }
+      try {
+        var len = Math.round(ctx.sampleRate * 0.3), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+        for (var i = 0; i < len; i++) d[i] = Math.sin(2 * Math.PI * 660 * i / ctx.sampleRate) * 0.4 * Math.exp(-6 * i / len);
+        var src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(ctx.currentTime + 0.4);
+        setTimeout(function () { row('sound', '방식 3 (Web Audio)', '재생 요청함 · 상태 ' + ctx.state, ctx.state === 'running'); }, 900);
+      } catch (e) { row('sound', '방식 3 (Web Audio)', '막힘 · ' + err(e), false); }
+    } catch (e) { row('sound', '방식 3 (Web Audio)', '막힘 · ' + err(e), false); }
+  });
+
+  // ---------- 결과 복사 ----------
+  $('copyBtn').addEventListener('click', function () {
+    var text = '장원급제 점검 결과\n' + $('out').value;
+    function fallback() { $('out').focus(); $('out').select(); $('copyMsg').textContent = '결과 칸을 길게 눌러 복사해 주세요.'; }
+    try {
+      navigator.clipboard.writeText(text).then(function () { $('copyMsg').textContent = '복사했어요. Claude에게 붙여 넣어 주세요.'; }, fallback);
+    } catch (e) { fallback(); }
+  });
+})();
+</script>
+</body>
+</html>

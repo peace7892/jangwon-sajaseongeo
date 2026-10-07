@@ -3,6 +3,7 @@
   'use strict';
   var D = window.DATA, L = window.Logic;
   var KEY = 'jangwon-sajaseongeo-v1';
+  var APP_VERSION = '10.08-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CARD = {}, GROUP = {};
   D.CARDS.forEach(function (c) { CARD[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -124,10 +125,13 @@
   }
 
   // ---------- 소리 ----------
-  // 효과음은 WAV로 만들어 data: 주소로 일반 오디오(<audio>)에 넣는다. 아이패드 Safari는 blob: 주소 오디오를
-  // NotSupportedError로 거절해서 data: 주소를 쓴다. 그래도 일반 오디오가 안 되면 Web Audio로 재생한다.
-  // 아이패드는 오디오를 첫 터치 때 한 번 "깨워야" 나중에 재생할 수 있어서, 두 방식 모두 첫 터치 때 깨워 둔다.
-  var players = {}, unlocked = false, lastPlay = null, useWebAudio = false, ac = null, buffers = {};
+  // 효과음은 세 가지 방식을 차례로 시도한다. 하나가 NotSupportedError로 막히면 다음 방식으로 넘어간다.
+  //   방식 1: AAC 파일(sounds/*.m4a) — 아이패드 기본 형식. 차단 모드(Lockdown Mode)에서도 막히지 않는다
+  //   방식 2: WAV(data: 주소) — 아이패드 Safari는 blob: 주소 오디오를 거절해서 data: 주소를 쓴다
+  //   방식 3: Web Audio — 차단 모드에서는 꺼져 있다
+  // 아이패드는 오디오를 첫 터치 때 한 번 "깨워야" 나중에 재생할 수 있어서, 첫 터치 때 깨워 둔다.
+  var SOUND_MODES = ['aac', 'wav', 'webaudio'], soundMode = 0;
+  var players = { aac: {}, wav: {} }, unlocked = false, lastPlay = null, ac = null, buffers = {};
   function clipSamples(name) { return window.Sound.renderClip(window.Sound.CLIPS[name], window.Sound.RATE); }
   function wavDataURL(bytes) {
     var bin = '';
@@ -135,14 +139,19 @@
     return 'data:audio/wav;base64,' + btoa(bin);
   }
   function player(name) {
-    if (!players[name]) {
+    var kind = SOUND_MODES[soundMode], bag = players[kind];
+    if (!bag[name]) {
       var a = new Audio();
       a.preload = 'auto';
-      a.src = wavDataURL(window.Sound.encodeWav(clipSamples(name), window.Sound.RATE));
+      a.src = kind === 'aac' ? 'sounds/' + name + '.m4a' : wavDataURL(window.Sound.encodeWav(clipSamples(name), window.Sound.RATE));
       a.addEventListener('ended', function () { a.busy = false; });
-      players[name] = a;
+      bag[name] = a;
     }
-    return players[name];
+    return bag[name];
+  }
+  // 지금 방식이 막혔을 때만 다음 방식으로 (여러 효과음이 동시에 실패해도 한 칸만 넘어간다)
+  function nextSoundMode(from) {
+    if (soundMode === from && soundMode < SOUND_MODES.length - 1) soundMode += 1;
   }
   function audioContext() {
     if (!ac) {
@@ -173,9 +182,12 @@
   function unlockAudio() {
     if (unlocked) return;
     unlocked = true;
-    audioContext();   // 대신 쓸 Web Audio도 이 터치 안에서 깨워 둔다
+    if (window.AudioContext || window.webkitAudioContext) audioContext();   // 마지막 방식도 이 터치 안에서 깨워 둔다
     var probe = document.createElement('audio');
-    if (!probe.canPlayType || !probe.canPlayType('audio/wav')) { useWebAudio = true; return; }
+    if (probe.canPlayType && !probe.canPlayType('audio/mp4')) nextSoundMode(0);
+    if (soundMode === 1 && probe.canPlayType && !probe.canPlayType('audio/wav')) nextSoundMode(1);
+    if (SOUND_MODES[soundMode] === 'webaudio') return;
+    var mode = soundMode;
     Object.keys(window.Sound.CLIPS).forEach(function (name) {
       var a = player(name);
       if (a.busy) return;
@@ -188,7 +200,7 @@
       if (p && p.then) {
         p.then(settle, function (err) {
           a.muted = false;
-          if (err && err.name === 'NotSupportedError') useWebAudio = true;
+          if (err && err.name === 'NotSupportedError') nextSoundMode(mode);
           else unlocked = false;
         });
       } else {
@@ -200,9 +212,10 @@
   document.addEventListener('click', unlockAudio, true);
   function playClip(name) {
     if (!state.sound) return;
-    if (useWebAudio) {
+    var mode = soundMode;
+    if (SOUND_MODES[mode] === 'webaudio') {
       var ok = webAudioPlay(name);
-      lastPlay = { ok: ok, via: 2, why: ok ? '' : 'Web Audio' };
+      lastPlay = { ok: ok, via: mode + 1, why: ok ? '' : 'Web Audio 없음' };
       return;
     }
     var a = player(name);
@@ -211,26 +224,26 @@
     try { a.currentTime = 0; } catch (e) { /* 아직 불러오는 중이면 처음부터 재생된다 */ }
     var p = a.play();
     if (p && p.then) {
-      p.then(function () { lastPlay = { ok: true, via: 1 }; }, function (err) {
+      p.then(function () { lastPlay = { ok: true, via: mode + 1 }; }, function (err) {
         a.busy = false;
         var why = (err && err.name) || '알 수 없음';
+        lastPlay = { ok: false, via: mode + 1, why: why };
         if (why === 'NotSupportedError') {
-          useWebAudio = true;
-          var ok2 = webAudioPlay(name);
-          lastPlay = { ok: ok2, via: 2, why: ok2 ? '' : why };
-        } else {
-          lastPlay = { ok: false, via: 1, why: why };
+          nextSoundMode(mode);
+          if (soundMode !== mode) playClip(name);
         }
       });
     }
   }
+  var SOUND_LABEL = ['AAC 파일', 'WAV', 'Web Audio'];
   function soundStatus() {
     if (!state.sound) return '앱 소리가 꺼져 있어요. 홈 화면 오른쪽 위 “소리 끔”을 눌러 켜 주세요.';
     if (!lastPlay) return '소리를 아직 재생하지 못했어요. 한 번 더 눌러 주세요.';
+    var how = '방식 ' + lastPlay.via + ' · ' + SOUND_LABEL[lastPlay.via - 1];
     if (lastPlay.ok) {
-      return '소리를 재생했어요 (방식 ' + lastPlay.via + '). 그래도 안 들리면 아이패드 볼륨 버튼으로 소리를 키우고, 무음 모드가 아닌지 확인해 주세요.';
+      return '소리를 재생했어요 (' + how + '). 그래도 안 들리면 아이패드 볼륨 버튼으로 소리를 키우고, 무음 모드가 아닌지 확인해 주세요.';
     }
-    return '소리 재생이 막혔어요 (' + lastPlay.why + ', 방식 ' + lastPlay.via + '). 이 문구를 Claude에게 알려 주세요.';
+    return '소리 재생이 막혔어요 (' + lastPlay.why + ', ' + how + '). 한 번 더 눌러 보고, 그래도 막히면 이 문구를 Claude에게 알려 주세요.';
   }
   var sfx = {
     stamp: function (combo) { playClip(combo >= 2 ? 'combo' : 'stamp'); },
@@ -1125,5 +1138,6 @@
     goHome();
   });
 
+  $('appVersion').textContent = '버전 ' + APP_VERSION;
   goHome();
 })();

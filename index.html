@@ -143,6 +143,7 @@ p { margin: 0; }
 .tile.lock { background: transparent; border: 2px dashed var(--line); color: var(--grey-ink); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.85rem; color: var(--ink-soft); }
 .legend i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-right: 4px; }
+.version { justify-self: center; margin-top: -12px; font-size: 0.8rem; color: var(--grey-ink); }
 .link-btn { justify-self: center; background: none; border: 0; color: var(--ink-soft); text-decoration: underline; font-size: 0.95rem; padding: 8px; }
 
 /* 카드 */
@@ -337,6 +338,7 @@ p { margin: 0; }
       </p>
     </div>
     <button class="link-btn" id="parentLink" type="button">부모님 메뉴</button>
+    <p class="version" id="appVersion"></p>
   </section>
 
   <section class="view" id="v-card" aria-label="카드" hidden>
