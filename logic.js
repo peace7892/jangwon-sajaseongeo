@@ -298,6 +298,17 @@
     next.stickers.push({ d: date, e: emoji, k: kind, day: day });
     return next;
   }
+  // 부모님 메뉴 비밀번호: 번호를 그대로 두지 않고 해시(FNV-1a 32비트)로만 비교한다.
+  // 호기심에 눌러 보는 아이를 막는 용도라 암호학적 강도는 필요 없다
+  function pinHash(pin) {
+    var s = 'jangwon-parent:' + String(pin), h = 0x811c9dc5;
+    for (var i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  }
+  function checkPin(pin, hash) { return /^\d{4}$/.test(String(pin)) && pinHash(pin) === hash; }
   // 과거 시험을 마친 뒤 선물 룰렛을 한 번만 돌린다
   function pickPrize(state, prizes, rng, today) {
     if (state.prize || !state.exam) return state;
@@ -405,7 +416,7 @@
     studyDay: studyDay, isExamDay: isExamDay, addSticker: addSticker,
     finishDaily: finishDaily, finishReview: finishReview, setTodaySticker: setTodaySticker,
     examTitle: examTitle, recordExam: recordExam, pickPrize: pickPrize,
-    restorableSlots: restorableSlots, restoreSticker: restoreSticker,
+    restorableSlots: restorableSlots, restoreSticker: restoreSticker, pinHash: pinHash, checkPin: checkPin,
     emptyState: emptyState, sanitize: sanitize, encodeBackup: encodeBackup, decodeBackup: decodeBackup
   };
   if (typeof module === 'object' && module.exports) module.exports = Logic;

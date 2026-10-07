@@ -256,6 +256,19 @@ p { margin: 0; }
 .confirm { background: var(--hwang-soft); border-radius: 12px; padding: 12px 14px; display: grid; gap: 10px; }
 .confirm .field-row { justify-content: flex-start; }
 .help { color: var(--ink-soft); font-size: 0.95rem; }
+.lock-card { background: var(--card); border: 2px solid var(--line); border-radius: 22px; padding: 26px 20px; display: grid; gap: 14px; justify-items: center; text-align: center; }
+.lock-icon { font-size: 2.6rem; line-height: 1; }
+.lock-card h1 { font-size: 1.8rem; }
+.lock-card .help.bad { color: var(--ju); }
+.pin-dots { display: flex; gap: 16px; padding: 6px 0; }
+.pin-dots span { width: 20px; height: 20px; border-radius: 50%; border: 3px solid var(--cheong); background: transparent; }
+.pin-dots span.on { background: var(--cheong); }
+.pin-dots.shake { animation: shake 0.45s; }
+.keypad { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; width: min(300px, 100%); }
+.keypad button { min-height: 64px; border-radius: 16px; border: 2px solid var(--line); background: var(--paper); font-family: var(--font-display); font-size: 1.7rem; color: var(--ink); }
+.keypad button:active { background: var(--cheong-1); }
+.keypad button.small { font-family: var(--font-body); font-size: 1rem; color: var(--ink-soft); }
+.keypad .gap { visibility: hidden; }
 .slot-select { font: inherit; font-size: 1.05rem; padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); max-width: 100%; }
 .mini-stickers { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
 .mini-stickers button { aspect-ratio: 1; max-width: 100%; border: 2px solid var(--line); border-radius: 10px; background: var(--card); font-size: clamp(1.2rem, 4vw, 1.8rem); line-height: 1; padding: 0; }
@@ -337,7 +350,7 @@ p { margin: 0; }
         <span><i style="border:2px dashed var(--line)"></i>아직 못 얻음</span>
       </p>
     </div>
-    <button class="link-btn" id="parentLink" type="button">부모님 메뉴</button>
+    <button class="link-btn" id="parentLink" type="button">🔒 부모님 메뉴</button>
     <p class="version" id="appVersion"></p>
   </section>
 
@@ -420,6 +433,17 @@ p { margin: 0; }
       </div>
     </div>
     <button class="go-btn" type="button" data-go="home">홈으로</button>
+  </section>
+
+  <section class="view" id="v-lock" aria-label="부모님 메뉴 잠금" hidden>
+    <div class="lock-card">
+      <p class="lock-icon" aria-hidden="true">🔒</p>
+      <h1>부모님 메뉴</h1>
+      <p class="help" id="lockMsg" aria-live="polite">부모님 비밀번호 4자리를 눌러 주세요.</p>
+      <div class="pin-dots" id="pinDots" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      <div class="keypad" id="keypad"></div>
+      <button class="quiet-btn" type="button" data-go="home">홈으로</button>
+    </div>
   </section>
 
   <section class="view" id="v-parent" aria-label="부모님 메뉴" hidden>

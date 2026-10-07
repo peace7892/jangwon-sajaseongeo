@@ -3,7 +3,7 @@
   'use strict';
   var D = window.DATA, L = window.Logic;
   var KEY = 'jangwon-sajaseongeo-v1';
-  var APP_VERSION = '10.08-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '10.08-2';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CARD = {}, GROUP = {};
   D.CARDS.forEach(function (c) { CARD[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -256,7 +256,7 @@
   };
 
   // ---------- 공통 ----------
-  var VIEWS = ['name', 'home', 'card', 'quiz', 'sticker', 'prize', 'hong', 'parent'];
+  var VIEWS = ['name', 'home', 'card', 'quiz', 'sticker', 'prize', 'hong', 'lock', 'parent'];
   var S = null;          // 진행 중인 공부·연습
   function show(name) {
     VIEWS.forEach(function (v) { $('v-' + v).hidden = v !== name; });
@@ -539,7 +539,7 @@
   });
   $('practiceBtn').addEventListener('click', function () { startPractice(10, false); });
   $('examPracticeBtn').addEventListener('click', function () { startPractice(20, true); });
-  $('parentLink').addEventListener('click', showParent);
+  $('parentLink').addEventListener('click', showLock);
 
   // ---------- 공부 진행 ----------
   // 오늘의 공부와 과거 시험은 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
@@ -1009,6 +1009,73 @@
       confetti($('hongStage'));
     }
   }
+
+  // ---------- 부모님 메뉴 잠금 ----------
+  // 4자리 비밀번호를 해시로만 비교한다. 3번 틀리면 30초 동안 막는다. 메뉴에 들어갈 때마다 다시 묻는다
+  var PIN_TRIES = 3, PIN_WAIT_MS = 30000;
+  var pinEntry = '', pinFails = 0, pinLockedUntil = 0, pinTimer = null;
+  function pinWaitLeft() { return Math.max(0, Math.ceil((pinLockedUntil - Date.now()) / 1000)); }
+  function renderPin() {
+    $('pinDots').querySelectorAll('span').forEach(function (d, i) { d.classList.toggle('on', i < pinEntry.length); });
+  }
+  function renderLockMsg() {
+    clearTimeout(pinTimer);
+    var m = $('lockMsg'), left = pinWaitLeft();
+    if (left > 0) {
+      m.textContent = '여러 번 틀렸어요. ' + left + '초 뒤에 다시 해 주세요. 부모님께 여쭤보세요.';
+      m.className = 'help bad';
+      pinTimer = setTimeout(renderLockMsg, 1000);
+    } else if (pinFails > 0) {
+      m.textContent = '비밀번호가 틀렸어요. ' + (PIN_TRIES - pinFails) + '번 더 해 볼 수 있어요.';
+      m.className = 'help bad';
+    } else {
+      m.textContent = '부모님 비밀번호 4자리를 눌러 주세요.';
+      m.className = 'help';
+    }
+  }
+  function showLock() {
+    pinEntry = '';
+    renderPin();
+    renderLockMsg();
+    show('lock');
+  }
+  function pressPin(key) {
+    if (pinWaitLeft() > 0) return;
+    if (key === 'del') { pinEntry = pinEntry.slice(0, -1); renderPin(); return; }
+    if (pinEntry.length >= 4) return;
+    pinEntry += key;
+    renderPin();
+    if (pinEntry.length < 4) return;
+    if (L.checkPin(pinEntry, D.PARENT_PIN_HASH)) {
+      pinFails = 0;
+      pinEntry = '';
+      showParent();
+      return;
+    }
+    pinFails += 1;
+    if (pinFails >= PIN_TRIES) { pinFails = 0; pinLockedUntil = Date.now() + PIN_WAIT_MS; }
+    var dots = $('pinDots');
+    dots.classList.remove('shake');
+    void dots.offsetWidth;
+    dots.classList.add('shake');
+    sfx.wrong();
+    pinEntry = '';                       // 바로 비워서 이어서 누르는 숫자도 받는다
+    setTimeout(renderPin, 350);          // 흔들리는 동안만 점 4개를 보여 준다
+    renderLockMsg();
+  }
+  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].forEach(function (k) {
+    if (!k) { $('keypad').appendChild(el('span', 'gap')); return; }
+    var b = el('button', k === 'del' ? 'small' : null, k === 'del' ? '지우기' : k);
+    b.type = 'button';
+    b.setAttribute('aria-label', k === 'del' ? '한 글자 지우기' : '숫자 ' + k);
+    b.addEventListener('click', function () { pressPin(k); });
+    $('keypad').appendChild(b);
+  });
+  document.addEventListener('keydown', function (e) {
+    if ($('v-lock').hidden) return;
+    if (/^[0-9]$/.test(e.key)) pressPin(e.key);
+    else if (e.key === 'Backspace') pressPin('del');
+  });
 
   // ---------- 부모님 메뉴 ----------
   var pendingRestore = null;

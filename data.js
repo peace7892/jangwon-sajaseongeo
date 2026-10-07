@@ -266,10 +266,13 @@
 
   var STICKERS = ['🐯', '🦊', '🐼', '🐉', '🌸', '🍀', '🌕', '🍡'];
 
+  // 부모님 메뉴 비밀번호의 해시 (번호는 코드에 두지 않는다. 바꾸려면 Logic.pinHash(새 번호) 값을 넣는다)
+  var PARENT_PIN_HASH = '60bc7e37';
+
   // 과거 시험을 마치면 돌리는 선물 룰렛 (5칸, 한 번만 돌린다)
   var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
-  var DATA = { CARDS: CARDS, GROUPS: GROUPS, PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES };
+  var DATA = { CARDS: CARDS, GROUPS: GROUPS, PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);
