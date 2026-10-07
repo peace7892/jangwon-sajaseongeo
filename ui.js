@@ -3,7 +3,7 @@
   'use strict';
   var D = window.DATA, L = window.Logic;
   var KEY = 'jangwon-sajaseongeo-v1';
-  var APP_VERSION = '10.08-2';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '10.08-3';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CARD = {}, GROUP = {};
   D.CARDS.forEach(function (c) { CARD[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -182,11 +182,11 @@
   function unlockAudio() {
     if (unlocked) return;
     unlocked = true;
-    if (window.AudioContext || window.webkitAudioContext) audioContext();   // 마지막 방식도 이 터치 안에서 깨워 둔다
     var probe = document.createElement('audio');
     if (probe.canPlayType && !probe.canPlayType('audio/mp4')) nextSoundMode(0);
     if (soundMode === 1 && probe.canPlayType && !probe.canPlayType('audio/wav')) nextSoundMode(1);
-    if (SOUND_MODES[soundMode] === 'webaudio') return;
+    // Web Audio는 마지막 방식일 때만 만든다. 필요 없을 때 만들면 아이패드의 오디오 설정을 바꿔 일반 오디오에 끼어들 수 있다
+    if (SOUND_MODES[soundMode] === 'webaudio') { audioContext(); return; }
     var mode = soundMode;
     Object.keys(window.Sound.CLIPS).forEach(function (name) {
       var a = player(name);

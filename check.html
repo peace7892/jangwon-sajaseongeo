@@ -30,6 +30,13 @@ button.sub { background: var(--card); color: var(--cheong); border: 2px solid va
 button:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, monospace; padding: 10px; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); }
 .big { font-size: 2rem; font-weight: 700; color: var(--cheong); }
+.tests { display: grid; gap: 10px; }
+.test { border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; }
+.test .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.test .state { font-size: 0.9rem; color: var(--ink-soft); }
+.test .ask { display: flex; gap: 8px; flex-wrap: wrap; }
+.test .ask button { padding: 8px 14px; font-size: 0.95rem; }
+.test .ask button[aria-pressed="true"] { background: var(--cheong); color: var(--white); }
 </style>
 </head>
 <body>
@@ -40,7 +47,7 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
     <ol>
       <li>앱을 여는 것과 같은 방법(같은 Safari 즐겨찾기 등)으로 이 페이지를 열어요.</li>
       <li>Safari 주소창 옆 <b>새로고침</b>을 한 번 눌러요.</li>
-      <li>아래 <b>소리 시험</b> 버튼을 눌러요.</li>
+      <li><b>소리 시험</b>에서 소리를 하나씩 눌러 듣고, 들렸는지 골라요.</li>
       <li>맨 아래 <b>결과 복사</b>를 눌러 Claude에게 붙여 넣어 주세요. 복사가 안 되면 화면을 캡처해 주세요.</li>
       <li>잘 되는 아이패드에서도 한 번 해 주시면 두 대를 비교할 수 있어요.</li>
     </ol>
@@ -54,7 +61,8 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
 
   <div class="card">
     <h2>소리 시험</h2>
-    <button id="soundBtn" type="button">소리 시험</button>
+    <p>소리를 하나씩 눌러 듣고, 들렸는지 골라 주세요. 볼륨은 중간 이상으로 올려 주세요.</p>
+    <div id="soundTests" class="tests"></div>
     <div id="sound"></div>
   </div>
 
@@ -203,64 +211,101 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
   row('device', '전체 정보', ua);
 
   // ---------- 소리 시험 ----------
-  function beepWav() {
-    var rate = 22050, n = Math.round(rate * 0.3), bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
+  // 소리마다 따로 눌러 재생하고(아이패드는 터치할 때만 소리를 허용), 부모님이 들렸는지 직접 고른다.
+  // 재생 성공 신호와 실제로 들린 것이 다를 수 있어서 둘 다 기록한다.
+  function toneWav(seconds) {
+    var rate = 22050, n = Math.round(rate * seconds), bytes = new Uint8Array(44 + n * 2), v = new DataView(bytes.buffer);
     function t(o, s) { for (var i = 0; i < s.length; i++) bytes[o + i] = s.charCodeAt(i); }
     t(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); t(8, 'WAVE'); t(12, 'fmt ');
     v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
     v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
     t(36, 'data'); v.setUint32(40, n * 2, true);
-    for (var i = 0; i < n; i++) v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 880 * i / rate) * 12000 * Math.exp(-6 * i / n)), true);
+    for (var i = 0; i < n; i++) {
+      var fade = Math.min(1, i / 660, (n - i) / 660);
+      v.setInt16(44 + i * 2, Math.round(Math.sin(2 * Math.PI * 880 * i / rate) * 29000 * fade), true);
+    }
     var bin = '';
     for (var j = 0; j < bytes.length; j += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(j, j + 0x8000));
     return 'data:audio/wav;base64,' + btoa(bin);
   }
-  var soundDone = false;
-  $('soundBtn').addEventListener('click', function () {
-    if (soundDone) return;
-    soundDone = true;
-    var probe = document.createElement('audio');
-    row('sound', 'AAC 지원', probe.canPlayType ? (probe.canPlayType('audio/mp4') || '없음') : '알 수 없음');
-    row('sound', 'WAV 지원', probe.canPlayType ? (probe.canPlayType('audio/wav') || '없음') : '알 수 없음');
-    row('sound', 'MP3 지원', probe.canPlayType ? (probe.canPlayType('audio/mpeg') || '없음') : '알 수 없음');
-    function tryAudio(label, src, delay) {
-      setTimeout(function () {
-        try {
-          var a = new Audio(src);
-          a.onerror = function () { row('sound', label + ' 불러오기', '실패 · 코드 ' + (a.error ? a.error.code : '?'), false); };
-          var p = a.play();
-          if (p && p.then) p.then(function () { row('sound', label, '재생됨', true); },
-            function (e) { row('sound', label, '막힘 · ' + err(e), false); });
-          else row('sound', label, '재생 요청함');
-        } catch (e) { row('sound', label, '막힘 · ' + err(e), false); }
-      }, delay);
-    }
-    // 방식 1: AAC 파일, 방식 2: WAV(data 주소) — 앱과 같은 순서
-    tryAudio('방식 1 (AAC 파일)', 'sounds/stamp.m4a', 0);
-    tryAudio('방식 2 (WAV)', beepWav(), 0);
-    // 방식 3: Web Audio
+  function playElement(src, done) {
+    try {
+      var a = new Audio(src);
+      a.onerror = function () { done('불러오기 실패 · 코드 ' + (a.error ? a.error.code : '?')); };
+      var p = a.play();
+      if (p && p.then) p.then(function () { done('재생 신호 받음'); }, function (e) { done('막힘 · ' + err(e)); });
+      else done('재생 요청함');
+    } catch (e) { done('막힘 · ' + err(e)); }
+  }
+  var webCtx = null;
+  function playWebAudio(done) {
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) { row('sound', '방식 3 (Web Audio)', '없음 (꺼져 있음)', false); return; }
-      var ctx = new AC();
-      if (ctx.resume) ctx.resume();
-      row('sound', 'Web Audio 샘플레이트', String(ctx.sampleRate));
-      try {
-        var b1 = ctx.createBuffer(1, 2205, 22050);
-        row('sound', '버퍼 22050Hz', '만들어짐', true);
-        void b1;
-      } catch (e) { row('sound', '버퍼 22050Hz', '막힘 · ' + err(e), false); }
-      try {
-        var len = Math.round(ctx.sampleRate * 0.3), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-        for (var i = 0; i < len; i++) d[i] = Math.sin(2 * Math.PI * 660 * i / ctx.sampleRate) * 0.4 * Math.exp(-6 * i / len);
-        var src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.connect(ctx.destination);
-        src.start(ctx.currentTime + 0.4);
-        setTimeout(function () { row('sound', '방식 3 (Web Audio)', '재생 요청함 · 상태 ' + ctx.state, ctx.state === 'running'); }, 900);
-      } catch (e) { row('sound', '방식 3 (Web Audio)', '막힘 · ' + err(e), false); }
-    } catch (e) { row('sound', '방식 3 (Web Audio)', '막힘 · ' + err(e), false); }
+      if (!AC) { done('Web Audio 없음 (꺼져 있음)'); return; }
+      if (!webCtx) webCtx = new AC();
+      if (webCtx.resume) webCtx.resume();
+      var len = webCtx.sampleRate, buf = webCtx.createBuffer(1, len, webCtx.sampleRate), d = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = Math.sin(2 * Math.PI * 880 * i / webCtx.sampleRate) * 0.85 * Math.min(1, i / 1300, (len - i) / 1300);
+      var src = webCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(webCtx.destination);
+      src.start();
+      setTimeout(function () { done('재생 요청함 · 상태 ' + webCtx.state + ' · ' + webCtx.sampleRate + 'Hz'); }, 300);
+    } catch (e) { done('막힘 · ' + err(e)); }
+  }
+  var TESTS = [
+    { key: '1 기준음 (AAC 파일, 1초)', play: function (done) { playElement('sounds/tone.m4a', done); } },
+    { key: '2 앱 효과음 (AAC 파일)', play: function (done) { playElement('sounds/fanfare.m4a', done); } },
+    { key: '3 WAV 시험음 (1초)', play: function (done) { playElement(toneWav(1), done); } },
+    { key: '4 Web Audio 시험음 (1초)', play: playWebAudio }
+  ];
+  TESTS.forEach(function (t) {
+    var box = document.createElement('div');
+    box.className = 'test';
+    var top = document.createElement('div');
+    top.className = 'top';
+    var name = document.createElement('b');
+    name.textContent = t.key;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '▶ 듣기';
+    top.appendChild(name);
+    top.appendChild(btn);
+    var state = document.createElement('p');
+    state.className = 'state';
+    state.textContent = '아직 안 들어 봤어요';
+    var ask = document.createElement('div');
+    ask.className = 'ask';
+    ['들렸어요', '안 들렸어요'].forEach(function (label) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sub';
+      b.textContent = label;
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', function () {
+        ask.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+        results['sound · ' + t.key + ' · 귀로'] = label;
+        renderOut();
+      });
+      ask.appendChild(b);
+    });
+    btn.addEventListener('click', function () {
+      state.textContent = '재생하는 중…';
+      t.play(function (msg) {
+        state.textContent = msg;
+        results['sound · ' + t.key + ' · 신호'] = msg;
+        renderOut();
+      });
+    });
+    box.appendChild(top);
+    box.appendChild(state);
+    box.appendChild(ask);
+    $('soundTests').appendChild(box);
   });
+  var probe = document.createElement('audio');
+  row('sound', 'AAC 지원', probe.canPlayType ? (probe.canPlayType('audio/mp4') || '없음') : '알 수 없음');
+  row('sound', 'WAV 지원', probe.canPlayType ? (probe.canPlayType('audio/wav') || '없음') : '알 수 없음');
+  row('sound', 'MP3 지원', probe.canPlayType ? (probe.canPlayType('audio/mpeg') || '없음') : '알 수 없음');
 
   // ---------- 결과 복사 ----------
   $('copyBtn').addEventListener('click', function () {

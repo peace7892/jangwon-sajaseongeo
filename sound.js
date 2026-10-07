@@ -5,7 +5,7 @@
   'use strict';
 
   var RATE = 22050;
-  var MASTER = 1.8;   // 아이패드 스피커에서 잘 들리도록 전체 크기를 키운다
+  var PEAK = 0.95;    // 효과음마다 가장 큰 소리를 여기에 맞춘다 (처음엔 너무 작아서 아이패드에서 안 들렸다)
 
   function wave(type, phase) {
     if (type === 'triangle') return (2 / Math.PI) * Math.asin(Math.sin(phase));
@@ -23,10 +23,13 @@
       for (var i = 0; i < len && start + i < out.length; i++) {
         var t = i / rate;
         var env = Math.min(1, t / 0.012) * Math.exp(-7 * t / n.dur);   // 짧게 올라갔다가 부드럽게 줄어든다
-        out[start + i] += wave(n.type, 2 * Math.PI * n.f * t) * env * n.vol * MASTER;
+        out[start + i] += wave(n.type, 2 * Math.PI * n.f * t) * env * n.vol;
       }
     });
-    for (var j = 0; j < out.length; j++) out[j] = Math.max(-1, Math.min(1, out[j]));
+    var peak = 0;
+    for (var j = 0; j < out.length; j++) peak = Math.max(peak, Math.abs(out[j]));
+    var gain = peak > 0 ? PEAK / peak : 1;
+    for (var k = 0; k < out.length; k++) out[k] = Math.max(-1, Math.min(1, out[k] * gain));
     return out;
   }
 
@@ -56,7 +59,7 @@
   function notes(list, type, vol, gap, dur, from) {
     return list.map(function (f, i) { return { f: f, at: (from || 0) + i * gap, dur: dur, type: type, vol: vol }; });
   }
-  var THUD = { f: 90, at: 0, dur: 0.18, type: 'triangle', vol: 0.35 };
+  var THUD = { f: 220, at: 0, dur: 0.14, type: 'triangle', vol: 0.25 };   // 도장 '쾅' (아이패드 스피커가 낼 수 있는 높이)
   var CLIPS = {
     stamp: [THUD, { f: 1046, at: 0.09, dur: 0.25, vol: 0.18 }, { f: 1568, at: 0.19, dur: 0.35, vol: 0.18 }],
     combo: [THUD, { f: 1046, at: 0.09, dur: 0.25, vol: 0.18 }, { f: 1568, at: 0.19, dur: 0.35, vol: 0.18 },
@@ -66,7 +69,7 @@
     pop: [{ f: 660, at: 0, dur: 0.08, type: 'square', vol: 0.06 }, { f: 990, at: 0.05, dur: 0.12, vol: 0.12 }],
     flip: notes([784, 1046, 1318], 'triangle', 0.1, 0.06, 0.45),
     fanfare: notes([523, 659, 784, 1046, 1318, 1568], 'triangle', 0.12, 0.07, 0.45),
-    rattle: notes([300, 340, 380], 'triangle', 0.1, 0.3, 0.1)
+    rattle: notes([300, 340, 380], 'triangle', 0.1, 0.25, 0.22)
   };
 
   var Sound = { RATE: RATE, renderClip: renderClip, encodeWav: encodeWav, CLIPS: CLIPS };
