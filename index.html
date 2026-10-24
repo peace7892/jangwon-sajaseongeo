@@ -263,6 +263,20 @@ p { margin: 0; }
 .miss-a small { color: var(--ink-soft); }
 .miss-a b { color: var(--cheong-deep); font-weight: 400; font-family: var(--font-display); }
 .miss-time { color: var(--ink-soft); text-align: center; }
+/* 필순: 연한 회색 글자에 한 획만 진하게. 카드에서는 한 획씩 늘어나는 그림 */
+.stroke-svg path { fill: #D3DCD9; }
+.stroke-svg path.done { fill: var(--ink-soft); }
+.stroke-svg path.on { fill: var(--ink); }
+.q-text.stroke { justify-self: center; padding: 0; }
+.q-stroke { display: block; width: 190px; height: 190px; background: var(--paper); border-radius: 16px;
+  background-image: linear-gradient(var(--line), var(--line)), linear-gradient(var(--line), var(--line));
+  background-size: 100% 2px, 2px 100%; background-position: center; background-repeat: no-repeat; }
+.choices.nums { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.stroke-strip { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.stroke-strip li { display: grid; justify-items: center; font-size: 0.8rem; color: var(--ink-soft); }
+.stroke-strip .mini { width: 52px; height: 52px; background: var(--paper); border-radius: 8px; }
+.stroke-strip .mini path.on { fill: var(--ju); }
+.miss-q .tiny { width: 56px; height: 56px; display: block; }
 
 /* 스티커 */
 .stickers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -556,6 +570,7 @@ p { margin: 0; }
 <script src="data.js"></script>
 <script src="logic.js"></script>
 <script src="quiz.js"></script>
+<script src="strokes.js"></script>
 <script src="sound.js"></script>
 <script src="ui.js"></script>
 </body></html>

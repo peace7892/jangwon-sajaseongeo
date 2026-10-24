@@ -11,8 +11,9 @@
   var REVIEW_SESSION_SIZE = 15; // 두 번째 공부 문제 수
   var REVIEW_SESSION_MAX = 20;
   var TASTE = 5;                // 진단 날 아는 글자가 적으면 미리 맛보는 새 글자 수
-  // 실제 시험 70문항 중 필순 2문항을 뺀 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2
-  var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2 };
+  // 실제 시험 70문항 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2 · 필순 2
+  var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2, stroke: 2 };
+  var ORDINALS = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
 
   // ---------- 도움 ----------
   function shuffle(arr, rng) {
@@ -108,6 +109,21 @@
       key: w.id, answer: w.w, explain: w.w + '(' + w.r + ') — ' + w.m,
       choices: shuffle(picks, rng).map(function (x) { return { id: x.id, text: x.w }; }) };
   }
+  // 필순: 진하게 표시한 n번째 획이 몇 번째로 쓰는 획인지 고른다 (보기는 획 수만큼, 열 번째까지)
+  function makeStroke(c, n, mode) {
+    var choices = [];
+    for (var i = 1; i <= Math.min(10, c.strokes); i++) choices.push({ id: i, text: ORDINALS[i - 1] + ' 번째' });
+    return { id: c.id, type: 'stroke', mode: mode, ask: '진하게 표시한 획은 몇 번째로 쓰나요?', show: c.h, big: true, n: n,
+      key: n, answer: ORDINALS[n - 1] + ' 번째', explain: c.h + '(' + c.hun + ')의 진한 획은 ' + ORDINALS[n - 1] + ' 번째로 써요. 모두 ' + c.strokes + '획이에요.' +
+        (c.tip && c.tip.indexOf('필순') >= 0 ? '\n' + c.tip : ''), choices: choices };
+  }
+  function strokeQuestions(n, data, rng, mode) {
+    var hs = shuffle(data.STROKE_ORDER.split(''), rng).slice(0, n);
+    return hs.map(function (h) {
+      var c = data.CHARS.filter(function (x) { return x.h === h; })[0];
+      return makeStroke(c, 1 + Math.floor(rng() * Math.min(10, c.strokes)), mode);
+    });
+  }
   // 별이 많을수록 어려운 문제: 고르기 → 쓰기 → 한자어 읽기
   function reviewQuestion(state, id, data, rng, mode) {
     var s = starsOf(state, id), c = charOf(data, id);
@@ -168,7 +184,7 @@
     });
     shuffle(data.CHARS, rng).slice(0, MOCK.hun).forEach(function (c) { steps.push(step(makeHunWrite(c, 'exam'))); });
     oppQuestions(MOCK.opp, data, rng, 'exam').concat(idiomQuestions(MOCK.idiom, data, rng, 'exam'),
-      meanQuestions(MOCK.mean, data, rng, 'exam')).forEach(function (q) { steps.push(step(q)); });
+      meanQuestions(MOCK.mean, data, rng, 'exam'), strokeQuestions(MOCK.stroke, data, rng, 'exam')).forEach(function (q) { steps.push(step(q)); });
     return steps;
   }
   function buildDay(state, today, data, rng) {
@@ -203,7 +219,7 @@
         steps.push(step(makeDokWrite(w, id, data, 'practice')));
       });
       oppQuestions(2, data, rng, 'practice').concat(idiomQuestions(2, data, rng, 'practice'),
-        meanQuestions(2, data, rng, 'practice')).forEach(function (q) { steps.push(step(q)); });
+        meanQuestions(2, data, rng, 'practice'), strokeQuestions(2, data, rng, 'practice')).forEach(function (q) { steps.push(step(q)); });
     }
     var count = steps.filter(function (s) { return s.t === 'q'; }).length;
     if (count < MIN_QUESTIONS) {
@@ -242,7 +258,8 @@
 
   var Quiz = {
     makeHunPick: makeHunPick, makeHunWrite: makeHunWrite, makeDokWrite: makeDokWrite,
-    makeOpp: makeOpp, makeIdiom: makeIdiom, makeMean: makeMean, reviewQuestion: reviewQuestion,
+    makeOpp: makeOpp, makeIdiom: makeIdiom, makeMean: makeMean, makeStroke: makeStroke, strokeQuestions: strokeQuestions,
+    reviewQuestion: reviewQuestion,
     planType: planType, dayType: dayType, newPerDay: newPerDay, wordsWith: wordsWith,
     buildDay: buildDay, buildReview: buildReview, buildMock: buildMock, buildPractice: buildPractice
   };

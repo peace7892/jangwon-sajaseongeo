@@ -4,7 +4,7 @@
   var D = window.DATA, L = window.Logic, Q = window.Quiz;
   var KEY = 'jangwon-hanja-v1';
   var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '10.24-2';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '10.24-3';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -659,6 +659,24 @@
     return next.t === 'card' ? '새 한자 보러 가기' : '다음 문제';
   }
 
+  // ---------- 필순 그림 ----------
+  // mark번째(0부터) 획을 진하게. steps가 참이면 그 앞 획은 회색으로 이미 쓴 것처럼, 뒤 획은 아주 연하게 (한 획씩 늘어나는 그림)
+  function strokeSvgHTML(h, mark, steps, cls) {
+    var paths = (window.STROKES || {})[h];
+    if (!paths) return '';
+    return '<svg class="stroke-svg ' + cls + '" viewBox="0 0 1024 1024" aria-hidden="true"><g transform="scale(1,-1) translate(0,-900)">' +
+      paths.map(function (d, i) {
+        return '<path class="' + (i === mark ? 'on' : steps && i < mark ? 'done' : '') + '" d="' + d + '"/>';
+      }).join('') + '</g></svg>';
+  }
+  function strokeStripHTML(h) {
+    var paths = (window.STROKES || {})[h];
+    if (!paths) return '';
+    return '<div class="sc-row"><b>필순 (빨간 획이 그 차례에 쓰는 획)</b><ol class="stroke-strip">' + paths.map(function (d, i) {
+      return '<li>' + strokeSvgHTML(h, i, true, 'mini') + '<span>' + (i + 1) + '</span></li>';
+    }).join('') + '</ol></div>';
+  }
+
   // ---------- 카드 ----------
   var cardMode = 'learn';
   var GRADE_NAME = { 8: '8급', 7.2: '7급Ⅱ', 7: '7급' };
@@ -671,6 +689,7 @@
       '<div class="sc-char"><p class="sc-big" lang="zh-Hant">' + esc(c.h) + '</p><div><p class="sc-hun">' + esc(c.hun) + '</p>' +
       '<p class="sc-strokes">총 ' + c.strokes + '획</p></div></div>';
     if (c.tip) html += '<div class="sc-row sc-tip"><b>기억 팁</b><p>' + esc(c.tip) + '</p></div>';
+    html += strokeStripHTML(c.h);
     var words = Q.wordsWith(D, c.id).slice().sort(function (x, y) { return x.c.length - y.c.length; }).slice(0, 3);
     if (words.length) {
       html += '<div class="sc-row"><b>이 한자가 든 낱말</b><ul class="sc-words">' + words.map(function (w) {
@@ -730,7 +749,7 @@
   });
 
   // ---------- 문제 ----------
-  var TYPE_LABEL = { 'hun-pick': '훈음 고르기', 'hun-write': '훈음 쓰기', 'dok-write': '한자어 읽기', opp: '반대 한자', idiom: '성어 완성', mean: '뜻풀이' };
+  var TYPE_LABEL = { 'hun-pick': '훈음 고르기', 'hun-write': '훈음 쓰기', 'dok-write': '한자어 읽기', opp: '반대 한자', idiom: '성어 완성', mean: '뜻풀이', stroke: '필순' };
   var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '실전 시험', diag: '실력 진단' };
   var HANJA_CHOICE = { opp: 1, idiom: 1, mean: 1 };
   var answered = false, copyMode = false, autoNext = null;
@@ -743,8 +762,15 @@
     $('qCount').textContent = '문제 ' + S.qn + ' / ' + S.total;
     $('progressFill').style.width = Math.round((S.qn - 1) / S.total * 100) + '%';
     $('qType').textContent = MODE_LABEL[q.mode] + ' · ' + TYPE_LABEL[q.type];
-    $('qText').textContent = q.show;
-    $('qText').className = 'q-text' + (q.big ? ' big hj' : '');
+    if (q.type === 'stroke') {
+      $('qText').innerHTML = strokeSvgHTML(q.show, q.n - 1, false, 'q-stroke');
+      $('qText').className = 'q-text stroke';
+      $('qText').setAttribute('aria-label', q.show + ' 글자에서 진하게 표시한 획');
+    } else {
+      $('qText').textContent = q.show;
+      $('qText').className = 'q-text' + (q.big ? ' big hj' : '');
+      $('qText').removeAttribute('aria-label');
+    }
     $('qHelp').textContent = q.ask + (q.help ? '\n' + q.help : '');
     $('feedback').hidden = true;
     $('stamp').hidden = true;
@@ -781,7 +807,7 @@
       onEnter(input, submitWrite);
       input.addEventListener('input', function () { err.textContent = ''; });
     } else {
-      var list = el('div', 'choices' + (HANJA_CHOICE[q.type] ? ' hanja' : ''));
+      var list = el('div', 'choices' + (HANJA_CHOICE[q.type] ? ' hanja' : q.type === 'stroke' ? ' nums' : ''));
       q.choices.forEach(function (ch) {
         var b = el('button', 'choice word' + (HANJA_CHOICE[q.type] ? ' hj' : ''), ch.text);
         b.type = 'button';
@@ -868,7 +894,7 @@
       lines.push('고른 ' + w.w + '(' + w.r + ')' + (hasBatchim(w.r) ? '은' : '는') + ' “' + w.m + '”이에요.');
     } else if (chosenId && q.type === 'hun-pick') {
       lines.push('고른 ' + quoted(CHAR[chosenId].hun, '은', '는') + ' ' + CHAR[chosenId].h + '의 훈음이에요.');
-    } else if (chosenId) {
+    } else if (chosenId && q.type !== 'stroke') {
       lines.push('고른 한자: ' + CHAR[chosenId].h + ' ' + CHAR[chosenId].hun);
     }
     lines.push(q.explain);
@@ -1017,7 +1043,9 @@
       box.appendChild(el('h3', null, '틀린 문제 ' + X.miss.length + '개'));
       X.miss.forEach(function (m) {
         var q = X.steps[m.i].q, row = el('div', 'miss');
-        row.appendChild(el('span', 'miss-q' + (q.big ? ' hj' : ''), q.show));
+        var cell = el('span', 'miss-q' + (q.big ? ' hj' : ''), q.type === 'stroke' ? null : q.show);
+        if (q.type === 'stroke') cell.innerHTML = strokeSvgHTML(q.show, q.n - 1, false, 'tiny');
+        row.appendChild(cell);
         var info = el('span', 'miss-a');
         info.appendChild(el('small', null, TYPE_LABEL[q.type]));
         info.appendChild(el('span', null, '내 답: ' + (m.a || '(넘김)')));

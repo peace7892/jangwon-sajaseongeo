@@ -71,9 +71,10 @@
       tip: '一 위에 있는 것 = 위' },
     { id: 36, h: '下', hun: '아래 하', answers: ['아래 하'], eum: ['하'], grade: 7.2, strokes: 3, g: 3,
       tip: '一 아래에 있는 것 = 아래' },
-    { id: 37, h: '左', hun: '왼 좌', answers: ['왼 좌'], eum: ['좌'], grade: 7.2, strokes: 5, g: 3 },
+    { id: 37, h: '左', hun: '왼 좌', answers: ['왼 좌'], eum: ['좌'], grade: 7.2, strokes: 5, g: 3,
+      tip: '필순: 一을 먼저, 丿을 나중에 써요(右는 반대).' },
     { id: 38, h: '右', hun: '오를/오른(쪽) 우', answers: ['오를 우', '오른 우', '오른쪽 우'], eum: ['우'], grade: 7.2, strokes: 5, g: 3,
-      tip: '손 + 口 = 오른손' },
+      tip: '손 + 口 = 오른손. 필순: 丿을 먼저, 一을 나중에 써요(左는 반대).' },
     { id: 39, h: '中', hun: '가운데 중', answers: ['가운데 중'], eum: ['중'], grade: 8, strokes: 4, g: 3,
       tip: '네모 한가운데를 꿰뚫은 선' },
     { id: 40, h: '內', hun: '안 내', answers: ['안 내'], eum: ['내'], grade: 7.2, strokes: 4, g: 3,
@@ -612,6 +613,9 @@
   var MOCK_FROM = '2026-11-10';
   var EXAM_MINUTES = 50;
 
+  // 필순 문제에 쓰는 글자: 우리(어문회)와 중국 필순이 같은 글자만 (획 모양은 strokes.js). 右는 우리 순서로 바꿔 넣었다
+  var STROKE_ORDER = '四五六七九十百千日月水木土山川江天林上下左右中外方父兄子女夫寸名午夕文字王主市村工安休手口心力自立大小白少正平不';
+
   // 별 합계 기준 (150자 × 별 3 = 최대 450)
   var RANKS = [
     { name: '학동', min: 0 },
@@ -631,7 +635,7 @@
   var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
   var DATA = { CHARS: CHARS, GROUPS: GROUPS, WORDS: WORDS, READING_EXCEPTIONS: READING_EXCEPTIONS, PAIRS: PAIRS, IDIOMS: IDIOMS,
-    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, EXAM_MINUTES: EXAM_MINUTES, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
+    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, EXAM_MINUTES: EXAM_MINUTES, STROKE_ORDER: STROKE_ORDER, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);
