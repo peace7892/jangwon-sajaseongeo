@@ -87,7 +87,7 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
 <script>
 (function () {
   'use strict';
-  var KEY = 'jangwon-sajaseongeo-v1';
+  var KEY = 'jangwon-hanja-v1';
   var results = {};   // 이름 → 값 (복사용)
   function $(id) { return document.getElementById(id); }
   function row(box, label, value, good) {
@@ -168,7 +168,7 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
       if (st0) {
         row('app', '이름', st0.name || '(없음)', !!st0.name);
         row('app', '스티커', String((st0.stickers || []).length) + '장');
-        row('app', '카드', String(Object.keys(st0.cards || {}).length) + '장');
+        row('app', '한자', String(Object.keys(st0.cards || {}).length) + '자');
         row('app', '기록 크기', Math.round(raw.length / 1024 * 10) / 10 + 'KB');
       }
     }

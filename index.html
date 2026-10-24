@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>장원급제 사자성어</title>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>장원급제 한자 7급</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Noto+Serif+KR:wght@600;700&display=swap">
@@ -86,10 +86,12 @@ p { margin: 0; }
 .panel-head h2 { font-size: 1.35rem; }
 .panel-head span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .board { display: grid; gap: 14px; padding-bottom: 6px; }
-.cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-.daycol { display: grid; gap: 12px; justify-items: stretch; min-width: 0; }
+.cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px 6px; }
+.daycol { display: grid; gap: 10px; justify-items: stretch; min-width: 0; }
 .daylbl { text-align: center; font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
 .cell.rev { border-color: var(--cheong-1); font-size: 0.75rem; }
+.cell.mock .tag { background: var(--ju); }
+.cell.diag .tag { background: var(--nam); }
 .cell.gift { border: 3px solid var(--hwang); background: var(--hwang-soft); }
 .cell.gift.ready { animation: glow 1.4s ease-in-out infinite; }
 .board-legend { font-size: 0.85rem; color: var(--ink-soft); }
@@ -120,7 +122,7 @@ p { margin: 0; }
   display: grid; place-items: center; position: relative; background: var(--paper);
   font-size: 0.8rem; color: var(--grey-ink); font-variant-numeric: tabular-nums; padding: 0;
 }
-.cell .stk { font-size: clamp(1.4rem, 5vw, 2.2rem); line-height: 1; }
+.cell .stk { font-size: clamp(1.2rem, 4.4vw, 2rem); line-height: 1; }
 .cell.filled { border-style: solid; border-color: var(--cheong-1); background: var(--white); }
 .cell.final { border: 3px solid var(--ju); background: var(--ju-soft); }
 .cell.locked .stk { filter: grayscale(0.85); opacity: 0.6; }
@@ -133,9 +135,12 @@ p { margin: 0; }
 @keyframes glow { 0%,100% { box-shadow: 0 0 0 0 rgba(233,162,12,0.5); } 50% { box-shadow: 0 0 0 7px rgba(233,162,12,0); } }
 @keyframes stick { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 100% { transform: scale(1) rotate(var(--r, 0deg)); opacity: 1; } }
 
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(66px, 1fr)); gap: 6px; }
-.tile { border-radius: 8px; padding: 6px 2px 4px; text-align: center; font-size: 0.8rem; line-height: 1.3; border: 2px solid transparent; overflow-wrap: anywhere; }
-.tile .st { display: block; font-size: 0.7rem; letter-spacing: 0.05em; }
+.tiles { display: grid; gap: 12px; }
+.tile-group { display: grid; gap: 4px; }
+.tile-name { font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
+.tile { border-radius: 8px; padding: 4px 2px 2px; text-align: center; font-family: var(--font-hanja); font-weight: 700; font-size: 1.35rem; line-height: 1.2; border: 2px solid transparent; }
+.tile .st { display: block; font-family: var(--font-body); font-weight: 400; font-size: 0.55rem; letter-spacing: 0; }
 .tile.s0 { background: var(--grey); color: var(--grey-ink); }
 .tile.s1 { background: var(--cheong-1); color: var(--cheong-deep); }
 .tile.s2 { background: var(--cheong-2); color: var(--cheong-deep); }
@@ -164,6 +169,16 @@ p { margin: 0; }
 .sc-stars { color: var(--hwang); letter-spacing: 0.15em; }
 .sc-word { font-family: var(--font-display); font-size: 2.8rem; line-height: 1.1; letter-spacing: 0.08em; }
 .sc-hanja { font-family: var(--font-hanja); font-weight: 700; font-size: 1.6rem; color: var(--ink-soft); letter-spacing: 0.25em; margin-top: 2px; }
+.hj { font-family: var(--font-hanja); font-weight: 700; }
+.sc-char { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.sc-big { font-family: var(--font-hanja); font-weight: 700; font-size: 6rem; line-height: 1; background: var(--paper); border-radius: 16px; padding: 10px 18px; }
+.sc-hun { font-family: var(--font-display); font-size: 2.2rem; line-height: 1.2; color: var(--cheong-deep); }
+.sc-strokes { color: var(--ink-soft); }
+.sc-words { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.sc-words li { background: var(--paper); border-radius: 10px; padding: 6px 12px; }
+.sc-words .hj { font-size: 1.3rem; }
+.sc-words b { font-family: var(--font-display); font-weight: 400; color: var(--cheong-deep); margin: 0 4px; }
+.sc-words span:last-child { color: var(--ink-soft); font-size: 0.95rem; }
 .sc-chars { display: grid; gap: 6px; margin: 0; }
 .sc-chars div { background: var(--paper); border-radius: 10px; padding: 8px 4px; text-align: center; min-width: 0; }
 .sc-chars dt { font-family: var(--font-hanja); font-weight: 700; font-size: 1.6rem; line-height: 1.2; }
@@ -193,10 +208,14 @@ p { margin: 0; }
 .q-type { justify-self: start; font-size: 0.9rem; background: var(--paper); border-radius: 6px; padding: 1px 10px; color: var(--ink-soft); }
 .q-text { font-family: var(--font-display); font-size: 1.6rem; line-height: 1.4; padding-right: 8px; }
 .q-text.big { font-size: 2.6rem; letter-spacing: 0.08em; }
-.q-help { color: var(--ink-soft); margin-top: -6px; }
+.q-text.big.hj { font-size: 4.4rem; line-height: 1.15; text-align: center; padding-right: 0; }
+.q-help { color: var(--ink-soft); margin-top: -6px; white-space: pre-line; }
 .choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
 .choice { text-align: left; background: var(--paper); border: 3px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: 1.1rem; line-height: 1.45; min-height: 64px; }
 .choice.word { font-family: var(--font-display); font-size: 1.5rem; letter-spacing: 0.06em; text-align: center; }
+.choices.hanja { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.choice.hj { font-family: var(--font-hanja); font-weight: 700; font-size: 2.2rem; }
+.choice.skip { width: 100%; margin-top: 10px; min-height: 52px; text-align: center; font-family: var(--font-display); color: var(--ink-soft); background: var(--card); border-style: dashed; }
 .choice.right { background: var(--cheong-1); border-color: var(--cheong); color: var(--cheong-deep); }
 .choice.wrong { background: var(--ju-soft); border-color: var(--ju); color: var(--ju); }
 .choice:disabled { cursor: default; opacity: 1; }
@@ -208,6 +227,7 @@ p { margin: 0; }
 .feedback { font-size: 1.05rem; border-radius: 12px; padding: 10px 14px; white-space: pre-line; }
 .feedback.ok { background: var(--cheong-1); color: var(--cheong-deep); }
 .feedback.no { background: var(--ju-soft); color: var(--ju); }
+.feedback.info { background: var(--paper); color: var(--ink); }
 .star-gain { font-family: var(--font-display); color: var(--hwang-deep); background: var(--hwang-soft); border-radius: 8px; padding: 0 8px; margin-right: 6px; }
 .stamp {
   position: absolute; top: 12px; right: 12px; width: 124px; height: 124px; border-radius: 50%;
@@ -282,6 +302,10 @@ p { margin: 0; }
   .ranks span { font-size: 0.8rem; }
   .q-text { font-size: 1.35rem; }
   .q-text.big, .sc-word { font-size: 2.2rem; }
+  .q-text.big.hj { font-size: 3.4rem; }
+  .sc-big { font-size: 4.6rem; }
+  .cells { gap: 12px 3px; }
+  .cell .tag { font-size: 0.6rem; padding: 0 3px; }
   .stamp { width: 100px; height: 100px; font-size: 1.1rem; }
   .stamp .hj { font-size: 1.6rem; }
 }
@@ -294,9 +318,9 @@ p { margin: 0; }
 
   <section class="view" id="v-name" aria-label="이름 입력" hidden>
     <div class="intro">
-      <p class="eyebrow">장원급제 사자성어</p>
+      <p class="eyebrow">장원급제 한자 7급</p>
       <h1>서당에 온 걸 환영해요!</h1>
-      <p>6일 동안 사자성어 43개를 익히고 장원급제에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <p>21일 동안 한자 150자를 익히고 11월 15일 한자능력검정시험 7급에 도전해요. 먼저 이름을 알려 주세요.</p>
       <p class="warn" id="nameStorageWarn" hidden></p>
       <div class="warn" id="nameInAppWarn" hidden>
         <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열어 주세요.</p>
@@ -332,22 +356,22 @@ p { margin: 0; }
     <div class="done-banner" id="doneBanner" hidden><b id="doneMain"></b><span id="doneSub"></span></div>
     <div class="sub-actions">
       <button class="sub-btn" id="practiceBtn" type="button">연습 문제 10개</button>
-      <button class="sub-btn" id="examPracticeBtn" type="button">과거 시험 연습 20문제</button>
+      <button class="sub-btn" id="hongBtn" type="button" hidden>홍패 보기</button>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>스티커판</h2><span id="boardCount"></span></div>
       <div class="board" id="board"></div>
-      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 마지막 날 🎁를 누르면 선물 룰렛!</p>
+      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 16~20일째는 모의고사! 합격하면 마지막 칸 🎁 선물 룰렛이 열려요.</p>
     </div>
     <div class="panel">
-      <div class="panel-head"><h2>사자성어 도감</h2><span id="dogamCount"></span></div>
+      <div class="panel-head"><h2>한자 도감</h2><span id="dogamCount"></span></div>
       <div class="tiles" id="tiles"></div>
       <p class="legend">
-        <span><i style="background:var(--grey)"></i>얻음</span>
+        <span><i style="background:var(--grey)"></i>배움</span>
         <span><i style="background:var(--cheong-1)"></i>별 1</span>
         <span><i style="background:var(--cheong-2)"></i>별 2</span>
         <span><i style="background:var(--cheong); outline:2px solid var(--hwang)"></i>별 3 (외움)</span>
-        <span><i style="border:2px dashed var(--line)"></i>아직 못 얻음</span>
+        <span><i style="border:2px dashed var(--line)"></i>아직 안 배움</span>
       </p>
     </div>
     <button class="link-btn" id="parentLink" type="button">🔒 부모님 메뉴</button>
@@ -361,7 +385,7 @@ p { margin: 0; }
     </div>
     <div class="flip">
       <div class="flip-inner" id="flipInner">
-        <button class="face front" id="flipFront" type="button">새 카드!<small>눌러서 뒤집기</small></button>
+        <button class="face front" id="flipFront" type="button">새 한자!<small>눌러서 뒤집기</small></button>
         <article class="face back" id="cardBack"></article>
       </div>
     </div>
@@ -424,7 +448,7 @@ p { margin: 0; }
         <p id="hongScore"></p>
         <p id="hongDate"></p>
       </div>
-      <p>6일 동안 정말 수고했어요!</p>
+      <p>여기까지 정말 수고했어요! 11월 15일 시험도 장원급제!</p>
       <button class="gift-btn" id="hongGift" type="button" hidden>🎁<span>선물 룰렛 돌리러 가기</span></button>
       <div class="coupon" id="hongCoupon" hidden>
         <p class="k">선물 쿠폰</p>
@@ -467,7 +491,7 @@ p { margin: 0; }
     </div>
     <div class="panel">
       <h2>스티커 되돌려 주기</h2>
-      <p class="help">공부했는데 스티커가 사라졌다면, 확인하신 만큼 여기서 다시 붙여 줄 수 있어요. 앞 칸부터 하나씩 붙여요. 첫 번째 공부 칸을 붙이면 다음 공부는 그다음 날 계획으로 넘어가고, 놓친 새 카드는 다음 공부에서 다시 익혀요.</p>
+      <p class="help">공부했는데 스티커가 사라졌다면, 확인하신 만큼 여기서 다시 붙여 줄 수 있어요. 앞 칸부터 하나씩 붙여요. 첫 번째 공부 칸을 붙이면 다음 공부는 그다음 날 계획으로 넘어가고, 놓친 새 한자는 다음 공부에서 다시 익혀요.</p>
       <select class="slot-select" id="pSlot" aria-label="붙일 칸"></select>
       <div class="mini-stickers" id="pStickers" aria-label="스티커 모양"></div>
       <label class="check"><input type="checkbox" id="pToday"> 오늘 한 공부예요</label>
@@ -497,7 +521,7 @@ p { margin: 0; }
     </div>
     <div class="panel">
       <h2>기록 지우기</h2>
-      <p class="help">이 아이패드의 이름, 카드, 별, 스티커가 모두 지워져요. 지우려면 아래 칸에 “지우기”라고 써 주세요.</p>
+      <p class="help">이 아이패드의 이름, 한자, 별, 스티커가 모두 지워져요. 지우려면 아래 칸에 “지우기”라고 써 주세요.</p>
       <div class="field-row">
         <input id="pReset" type="text" lang="ko" autocomplete="off" aria-label="지우기 확인">
         <button class="plain-btn danger" id="pResetBtn" type="button">기록 지우기</button>
@@ -510,6 +534,7 @@ p { margin: 0; }
 
 <script src="data.js"></script>
 <script src="logic.js"></script>
+<script src="quiz.js"></script>
 <script src="sound.js"></script>
 <script src="ui.js"></script>
 </body></html>

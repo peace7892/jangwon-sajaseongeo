@@ -1,12 +1,14 @@
-/* 장원급제 사자성어: 화면 그리기, 소리, 입력, 저장 */
+/* 장원급제 한자 7급: 화면 그리기, 소리, 입력, 저장 */
 (function () {
   'use strict';
-  var D = window.DATA, L = window.Logic;
-  var KEY = 'jangwon-sajaseongeo-v1';
-  var APP_VERSION = '10.08-3';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
-  var CARD = {}, GROUP = {};
-  D.CARDS.forEach(function (c) { CARD[c.id] = c; });
+  var D = window.DATA, L = window.Logic, Q = window.Quiz;
+  var KEY = 'jangwon-hanja-v1';
+  var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
+  var APP_VERSION = '10.24-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var CHAR = {}, GROUP = {}, WORD = {};
+  D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
+  D.WORDS.forEach(function (w) { WORD[w.id] = w; });
 
   function $(id) { return document.getElementById(id); }
   function el(tag, cls, text) {
@@ -33,10 +35,6 @@
     return code >= 0 && code <= 11171 && code % 28 !== 0;
   }
   function quoted(word, withBatchim, without) { return '“' + word + '”' + (hasBatchim(word) ? withBatchim : without); }
-  function meaningPhrase(m) {
-    var core = m.split('뜻으로, ').pop();   // "~다는 뜻으로, ~" 이면 "뜻"이 겹치지 않게 뒷부분만
-    return '“' + core + '”' + (hasBatchim(core) ? '이라는' : '라는') + ' 뜻이에요.';
-  }
 
   // ---------- 저장 ----------
   // 카카오톡·네이버 같은 앱 안의 브라우저는 앱을 닫으면 기록을 지울 수 있어서 Safari로 열도록 안내한다
@@ -66,13 +64,26 @@
   function parseState(raw) {
     try { return L.sanitize(JSON.parse(raw)); } catch (e) { return null; }
   }
+  // 한자 기록이 아직 없으면 사자성어 때 쓴 이름(과 소리 설정)만 가져온다
+  function fromOldApp() {
+    var s = L.emptyState();
+    try {
+      var old = JSON.parse(localStorage.getItem(OLD_KEY));
+      if (old && typeof old.name === 'string') s.name = old.name.slice(0, 8);
+      if (old && typeof old.sound === 'boolean') s.sound = old.sound;
+    } catch (e) { /* 예전 기록이 없거나 망가졌으면 처음부터 */ }
+    return s;
+  }
+  var importedName = false;
   function load() {
     var raw = null;
     try { raw = localStorage.getItem(KEY); } catch (e) { if (!storageError) storageError = (e && e.name) || '읽기 실패'; }
     if (!raw) {
       var copy = tabCopy(), fromTab = copy && parseState(copy);
       if (fromTab && fromTab.name) { recoveredFromTab = true; return fromTab; }
-      return L.emptyState();
+      var fresh = fromOldApp();
+      importedName = !!fresh.name;
+      return fresh;
     }
     lastRaw = raw;
     var parsed = parseState(raw);
@@ -83,7 +94,7 @@
     return parsed;
   }
   var state = load();
-  if (recoveredFromTab) save();
+  if (recoveredFromTab || importedName) save();
   function save() {
     var raw = JSON.stringify(state);
     tabCopy(raw);
@@ -364,24 +375,23 @@
       next.appendChild(el('b', null, rank.next.name));
       next.appendChild(document.createTextNode('까지 별 ' + rank.next.need + '개 남았어요'));
     } else {
-      next.textContent = '모든 카드를 외웠어요. 장원이에요!';
+      next.textContent = '모든 한자를 외웠어요. 장원이에요!';
     }
     renderStorageWarn();
     $('inAppWarn').hidden = !IN_APP;
     var left = L.daysUntil(t, D.EXAM_DATE);
     $('dday').hidden = left < 0;
-    $('dday').textContent = left > 0 ? '대회까지 ' + left + '일' : '오늘이 대회 날! 힘내요';
+    $('dday').textContent = left > 0 ? '한자 7급 시험까지 ' + left + '일' : '오늘이 시험 날! 힘내요';
 
     renderStart(t);
     var learned = renderTiles();
     $('practiceBtn').hidden = learned === 0;
-    $('examPracticeBtn').hidden = learned < D.CARDS.length;
+    $('hongBtn').hidden = !L.passedMock(state);
     renderBoard(t);
   }
 
-  function mainCount() { return state.stickers.filter(function (s) { return s.k !== 'review'; }).length; }
   function renderStart(t) {
-    var finished = mainCount() >= L.LAST_DAY, done = L.doneToday(state, t), act = L.activeSession(state, t);
+    var finished = L.allDone(state), done = L.doneToday(state, t), act = L.activeSession(state, t);
     var review = L.canReview(state, t);
     if (!act && (finished || (done && !review))) {
       $('startBtn').hidden = true;
@@ -389,8 +399,8 @@
       if (finished) {
         $('doneMain').textContent = L.LAST_DAY + '일을 모두 마쳤어요!';
         $('doneSub').textContent = state.prize
-          ? '선물: ' + state.prize.item + ' · 대회 날까지 연습 문제로 복습해요.'
-          : '스티커판의 🎁를 눌러 선물 룰렛을 돌려요!';
+          ? '선물: ' + state.prize.item + ' · 시험 날까지 연습 문제로 복습해요.'
+          : L.passedMock(state) ? '스티커판의 🎁를 눌러 선물 룰렛을 돌려요!' : '시험 날까지 연습 문제로 복습해요. 힘내요!';
       } else {
         $('doneMain').textContent = '오늘 두 번 다 했어요!';
         $('doneSub').textContent = '내일 또 만나요. 더 하고 싶으면 아래 연습 문제를 풀어요.';
@@ -403,36 +413,45 @@
       var qTotal = act.steps.filter(isQ).length;
       var qDone = act.steps.slice(0, act.i).filter(isQ).length;
       var cardsLeft = act.steps.slice(act.i).filter(isCard).length;
-      $('startMain').textContent = act.kind === 'exam' ? '과거 시험 이어서 보기'
+      $('startMain').textContent = act.kind === 'mock' ? '모의고사 이어서 보기' : act.kind === 'diag' ? '실력 진단 이어서 하기'
         : act.kind === 'review' ? '두 번째 공부 이어서 하기' : '이어서 하기';
       $('startSub').textContent = cardsLeft
-        ? '새 카드 ' + cardsLeft + '장 남았어요'
+        ? '새 한자 ' + cardsLeft + '자 남았어요'
         : '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
       return;
     }
+    var day = L.studyDay(state, t);
     if (review) {
-      var rq = L.buildReview(state, t, D, Math.random).steps.length;
+      var rq = Q.buildReview(state, t, D, Math.random).steps.filter(isQ).length;
       $('startMain').textContent = '두 번째 공부 시작';
-      $('startSub').textContent = '오늘 배운 카드 다시 쓰기 + 복습 · ' + rq + '문제';
+      $('startSub').textContent = { diag: '안다고 고른 한자 써 보기', mock: '모의고사에서 틀린 한자 + 복습' }[Q.planType(day, D)] ||
+        '오늘 배운 한자 다시 쓰기 + 복습';
+      $('startSub').textContent += ' · ' + rq + '문제';
       return;
     }
-    if (L.isExamDay(state, t)) {
-      $('startMain').textContent = '과거 시험 보러 가기';
-      $('startSub').textContent = L.LAST_DAY + '일째 · ' + D.CARDS.length + '문제 · 홍패를 받아요';
+    var preview = Q.buildDay(state, t, D, Math.random);
+    var total = preview.steps.filter(isQ).length;
+    if (preview.kind === 'diag') {
+      $('startMain').textContent = '실력 진단 시작';
+      $('startSub').textContent = '1일째 · ' + total + '자 훈음 고르기 · 이미 아는 한자를 찾아요';
       return;
     }
-    var preview = L.buildSession(state, t, D, Math.random);
+    if (preview.kind === 'mock') {
+      $('startMain').textContent = '모의고사 보러 가기';
+      $('startSub').textContent = day + '일째 · ' + total + '문제 · ' + L.passMark(total) + '문제 넘게 맞히면 합격!';
+      return;
+    }
     var reviews = preview.steps.filter(function (s) { return isQ(s) && s.q.mode === 'review'; }).length;
     var cards = preview.steps.filter(isCard).length;
-    var parts = [L.studyDay(state, t) + '일째'];
+    var parts = [day + '일째'];
     if (reviews) parts.push('복습 ' + reviews + '문제');
-    if (cards) parts.push('새 카드 ' + cards + '장');
-    if (!reviews && !cards) parts.push('연습 ' + preview.steps.filter(isQ).length + '문제');
+    if (cards) parts.push('새 한자 ' + cards + '자');
+    if (total - reviews - cards * 3 > 0 && !cards) parts.push((Q.planType(day, D) === 'dok' ? '한자어 읽기·유형 ' : '연습 ') + (total - reviews) + '문제');
     $('startMain').textContent = '오늘의 공부 시작';
     $('startSub').textContent = parts.join(' · ');
   }
 
-  // 스티커판: 날마다 한 칸씩, 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날은 홍패와 🎁 선물
+  // 스티커판: 21일 × 2칸(한 줄에 일주일), 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날 아래 칸은 🎁 선물
   var ROT = [-8, 6, -4, 9, -6, 5, -9];
   var justStuckKey = '';
   function renderBoard(t) {
@@ -450,15 +469,11 @@
     board.appendChild(cells);
     justStuckKey = '';
   }
+  var DAY_TAG = { diag: '진단', mock: '모의' };
   function cellFor(d, kind, isToday) {
     var sticker = state.stickers.filter(function (s) { return (s.k === 'review') === (kind === 'review') && s.day === d; })[0];
-    var isFinal = kind === 'main' && d === L.LAST_DAY;
-    var clickable = isFinal && !!state.exam;
-    var c = el(clickable ? 'button' : 'div', 'cell' + (kind === 'review' ? ' rev' : ''));
-    if (clickable) {
-      c.type = 'button';
-      c.addEventListener('click', function () { showHong(false); });
-    }
+    var type = Q.planType(d, D), tag = kind === 'main' && DAY_TAG[type];
+    var c = el('div', 'cell' + (kind === 'review' ? ' rev' : '') + (tag ? ' ' + type : ''));
     if (sticker) {
       c.classList.add('filled');
       var s = el('span', 'stk', sticker.e);
@@ -467,22 +482,16 @@
       s.style.transform = 'rotate(' + r + 'deg)';
       c.appendChild(s);
       if (justStuckKey === kind + d) c.classList.add('just-stuck');
-    } else if (isFinal) {
-      c.classList.add('locked');
-      c.appendChild(el('span', 'stk', '📜'));
     } else {
       c.textContent = isToday ? '오늘' : kind === 'review' ? '복습' : '';
     }
     if (!sticker && isToday) c.classList.add('today');
-    if (isFinal) {
-      c.classList.add('final');
-      c.appendChild(el('span', 'tag', '홍패'));
-    }
-    c.setAttribute('aria-label', d + '일째 ' + (kind === 'review' ? '두 번째 공부' : isFinal ? '과거 시험' : '첫 번째 공부') + (sticker ? ' 스티커' : ''));
+    if (tag) c.appendChild(el('span', 'tag', tag));
+    c.setAttribute('aria-label', d + '일째 ' + (kind === 'review' ? '두 번째 공부' : type === 'mock' ? '모의고사' : '첫 번째 공부') + (sticker ? ' 스티커' : ''));
     return c;
   }
   function giftCell() {
-    var open = !!state.exam;
+    var open = L.passedMock(state);
     var c = el(open ? 'button' : 'div', 'cell gift' + (open ? (state.prize ? '' : ' ready') : ' locked'));
     if (open) {
       c.type = 'button';
@@ -490,33 +499,38 @@
     }
     c.appendChild(el('span', 'stk', '🎁'));
     c.appendChild(el('span', 'tag', state.prize ? '받았음' : open ? '열기!' : '선물'));
-    c.setAttribute('aria-label', '선물 룰렛' + (open ? '' : ', 과거 시험을 마치면 열려요'));
+    c.setAttribute('aria-label', '선물 룰렛' + (open ? '' : ', 모의고사에 합격하면 열려요'));
     return c;
   }
 
+  // 한자 도감: 묶음마다 15칸
   function renderTiles() {
     var box = $('tiles'), learned = 0;
     box.innerHTML = '';
     D.GROUPS.forEach(function (g) {
+      var sec = el('div', 'tile-group'), grid = el('div', 'tile-grid');
+      sec.appendChild(el('p', 'tile-name', g.name));
       g.ids.forEach(function (id) {
-        var cs = state.cards[id], c = CARD[id];
+        var cs = state.cards[id], c = CHAR[id];
         if (!cs) {
           var lock = el('div', 'tile lock', '?');
           lock.appendChild(el('span', 'st', ' '));
-          lock.setAttribute('aria-label', '아직 못 얻은 카드');
-          box.appendChild(lock);
+          lock.setAttribute('aria-label', '아직 안 배운 한자');
+          grid.appendChild(lock);
           return;
         }
         learned++;
-        var b = el('button', 'tile s' + cs.s, c.w);
+        var b = el('button', 'tile s' + cs.s, c.h);
         b.type = 'button';
         b.appendChild(el('span', 'st', starText(cs.s)));
-        b.setAttribute('aria-label', c.w + ', 별 ' + cs.s + '개, 카드 보기');
+        b.setAttribute('aria-label', c.h + ' ' + c.hun + ', 별 ' + cs.s + '개, 카드 보기');
         b.addEventListener('click', function () { showDogamCard(id); });
-        box.appendChild(b);
+        grid.appendChild(b);
       });
+      sec.appendChild(grid);
+      box.appendChild(sec);
     });
-    $('dogamCount').textContent = learned + ' / ' + D.CARDS.length + '장';
+    $('dogamCount').textContent = learned + ' / ' + D.CHARS.length + '자';
     return learned;
   }
 
@@ -530,22 +544,22 @@
     var t = today(), act = L.activeSession(state, t);
     if (act) { beginSession(act); return; }
     var built;
-    if (L.canReview(state, t)) built = L.buildReview(state, t, D, Math.random);
-    else if (!L.doneToday(state, t)) built = L.buildSession(state, t, D, Math.random);
+    if (L.canReview(state, t)) built = Q.buildReview(state, t, D, Math.random);
+    else if (!L.doneToday(state, t) && !L.allDone(state)) built = Q.buildDay(state, t, D, Math.random);
     else { renderHome(); return; }
     if (!built.steps.length) { renderHome(); return; }
     setState(L.startSession(state, built, t));
     beginSession(state.session);
   });
-  $('practiceBtn').addEventListener('click', function () { startPractice(10, false); });
-  $('examPracticeBtn').addEventListener('click', function () { startPractice(20, true); });
+  $('practiceBtn').addEventListener('click', function () { startPractice(10); });
+  $('hongBtn').addEventListener('click', function () { showHong(false); });
   $('parentLink').addEventListener('click', showLock);
 
   // ---------- 공부 진행 ----------
-  // 오늘의 공부와 과거 시험은 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
+  // 오늘의 공부·진단·모의고사는 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
   // 연습 문제는 저장하지 않는다.
   function beginSession(saved) {
-    if (!saved.steps.length) { toast('먼저 오늘의 공부로 카드를 얻어 보세요.'); return; }
+    if (!saved.steps.length) { toast('먼저 오늘의 공부로 한자를 배워 보세요.'); return; }
     S = {
       kind: saved.kind, steps: saved.steps, i: saved.i || 0, combo: 0, right: saved.right || 0,
       qn: saved.steps.slice(0, saved.i || 0).filter(isQ).length,
@@ -557,8 +571,8 @@
     $('combo').hidden = true;
     runStep();
   }
-  function startPractice(n, all) {
-    beginSession({ kind: 'practice', steps: L.buildPractice(state, D, n, Math.random, all) });
+  function startPractice(n) {
+    beginSession({ kind: 'practice', steps: Q.buildPractice(state, D, n, Math.random) });
   }
   // 카드 한 장이나 문제 하나를 마칠 때마다 부른다. 마지막 단계면 그 자리에서 오늘을 마친 것으로 기록한다
   function stepDone(correct) {
@@ -566,7 +580,7 @@
     setState(L.advanceSession(state, correct));
     if (S.i + 1 < S.steps.length) return;
     var t = today();
-    if (S.kind === 'exam') setState(L.endSession(L.recordExam(state, S.right, S.total, t)));
+    if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, t)));
     else if (S.kind === 'review') setState(L.endSession(L.finishReview(state, t)));
     else setState(L.endSession(L.finishDaily(state, t)));
   }
@@ -583,22 +597,33 @@
   function nextLabel() {
     var next = S.steps[S.i + 1];
     if (!next) return '결과 보기';
-    return next.t === 'card' ? '새 카드 보러 가기' : '다음 문제';
+    return next.t === 'card' ? '새 한자 보러 가기' : '다음 문제';
   }
 
   // ---------- 카드 ----------
   var cardMode = 'learn';
-  function cardBackHTML(card, stars) {
-    var html = '<div class="sc-top"><span class="sc-group">' + esc(GROUP[card.g].name) + '</span>' +
+  var GRADE_NAME = { 8: '8급', 7.2: '7급Ⅱ', 7: '7급' };
+  function partnersOf(id) {
+    return D.PAIRS.filter(function (p) { return p.indexOf(id) >= 0; }).map(function (p) { return p[0] === id ? p[1] : p[0]; });
+  }
+  function cardBackHTML(c, stars) {
+    var html = '<div class="sc-top"><span class="sc-group">' + esc(GROUP[c.g].name) + ' · ' + GRADE_NAME[c.grade] + '</span>' +
       '<span class="sc-stars" aria-label="별 ' + (stars || 0) + '개">' + starText(stars || 0) + '</span></div>' +
-      '<div><p class="sc-word">' + esc(card.w) + '</p><p class="sc-hanja">' + esc(card.h) + '</p></div>' +
-      '<dl class="sc-chars" style="grid-template-columns: repeat(' + card.c.length + ', minmax(0, 1fr))">' +
-      card.c.map(function (x) { return '<div><dt>' + esc(x[0]) + '</dt><dd>' + esc(x[1]) + '</dd></div>'; }).join('') +
-      '</dl><p class="sc-mean">' + esc(card.m) + '</p>';
-    if (card.st) html += '<div class="sc-row"><b>이야기</b><p>' + esc(card.st) + '</p></div>';
-    html += '<div class="sc-row"><b>예문</b><p>' + esc(card.ex) + '</p></div>';
-    if (card.tip) html += '<div class="sc-row sc-tip"><b>기억 팁</b><p>' + esc(card.tip) + '</p></div>';
-    if (card.cf) html += '<div class="sc-row sc-warn"><b>헷갈리는 짝 · ' + esc(CARD[card.cf.id].w) + '</b><p>' + esc(card.cf.d) + '</p></div>';
+      '<div class="sc-char"><p class="sc-big" lang="zh-Hant">' + esc(c.h) + '</p><div><p class="sc-hun">' + esc(c.hun) + '</p>' +
+      '<p class="sc-strokes">총 ' + c.strokes + '획</p></div></div>';
+    if (c.tip) html += '<div class="sc-row sc-tip"><b>기억 팁</b><p>' + esc(c.tip) + '</p></div>';
+    var words = Q.wordsWith(D, c.id).slice().sort(function (x, y) { return x.c.length - y.c.length; }).slice(0, 3);
+    if (words.length) {
+      html += '<div class="sc-row"><b>이 한자가 든 낱말</b><ul class="sc-words">' + words.map(function (w) {
+        return '<li><span class="hj">' + esc(w.w) + '</span> <b>' + esc(w.r) + '</b> <span>' + esc(w.m) + '</span></li>';
+      }).join('') + '</ul></div>';
+    }
+    var opp = partnersOf(c.id);
+    if (opp.length) {
+      html += '<div class="sc-row sc-warn"><b>반대(상대) 한자</b><p>' + opp.map(function (id) {
+        return '<span class="hj">' + esc(c.h) + '</span> ↔ <span class="hj">' + esc(CHAR[id].h) + '</span> ' + esc(CHAR[id].hun);
+      }).join('<br>') + '</p></div>';
+    }
     return html;
   }
   function resetFlip(flipped) {
@@ -609,21 +634,21 @@
     inner.classList.remove('instant');
   }
   function showLearnCard(id) {
-    var c = CARD[id], cardSteps = S.steps.filter(isCard), k = 0;
+    var c = CHAR[id], cardSteps = S.steps.filter(isCard), k = 0;
     cardSteps.forEach(function (s, i) { if (s.id === id) k = i + 1; });
     cardMode = 'learn';
-    $('cardEyebrow').textContent = '오늘의 새 카드 ' + k + ' / ' + cardSteps.length + ' · ' + GROUP[c.g].name;
+    $('cardEyebrow').textContent = '오늘의 새 한자 ' + k + ' / ' + cardSteps.length + ' · ' + GROUP[c.g].name;
     $('cardBack').innerHTML = cardBackHTML(c, 0);
     $('flipFront').hidden = false;
     resetFlip(false);
     $('cardNext').hidden = true;
-    $('cardNext').textContent = nextLabel() === '다음 문제' ? '문제 풀러 가기' : nextLabel() === '새 카드 보러 가기' ? '다음 카드' : '결과 보기';
+    $('cardNext').textContent = nextLabel() === '다음 문제' ? '문제 풀러 가기' : nextLabel() === '새 한자 보러 가기' ? '다음 한자' : '결과 보기';
     show('card');
   }
   function showDogamCard(id) {
-    var c = CARD[id];
+    var c = CHAR[id];
     cardMode = 'dogam';
-    $('cardEyebrow').textContent = '사자성어 도감 · ' + GROUP[c.g].name;
+    $('cardEyebrow').textContent = '한자 도감 · ' + GROUP[c.g].name;
     $('cardBack').innerHTML = cardBackHTML(c, state.cards[id] ? state.cards[id].s : 0);
     $('flipFront').hidden = true;
     resetFlip(true);
@@ -646,21 +671,22 @@
   });
 
   // ---------- 문제 ----------
-  var TYPE_LABEL = { w2m: '성어 보고 뜻 고르기', m2w: '뜻 보고 성어 고르기', write: '직접 쓰기' };
-  var MODE_LABEL = { review: '복습', learn: '새 카드', practice: '연습', exam: '과거 시험' };
-  var HELP = { w2m: '알맞은 뜻을 고르세요.', m2w: '이 뜻을 가진 사자성어를 고르세요.', write: '이 뜻을 가진 사자성어를 쓰세요.' };
-  var answered = false, copyMode = false;
+  var TYPE_LABEL = { 'hun-pick': '훈음 고르기', 'hun-write': '훈음 쓰기', 'dok-write': '한자어 읽기', opp: '반대 한자', idiom: '성어 완성', mean: '뜻풀이' };
+  var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '모의고사', diag: '실력 진단' };
+  var HANJA_CHOICE = { opp: 1, idiom: 1, mean: 1 };
+  var answered = false, copyMode = false, autoNext = null;
 
   function showQuestion(q) {
+    clearTimeout(autoNext);
     S.qn++;
     answered = false;
     copyMode = false;
     $('qCount').textContent = '문제 ' + S.qn + ' / ' + S.total;
     $('progressFill').style.width = Math.round((S.qn - 1) / S.total * 100) + '%';
     $('qType').textContent = MODE_LABEL[q.mode] + ' · ' + TYPE_LABEL[q.type];
-    $('qText').textContent = q.prompt;
-    $('qText').className = 'q-text' + (q.type === 'w2m' ? ' big' : '');
-    $('qHelp').textContent = HELP[q.type];
+    $('qText').textContent = q.show;
+    $('qText').className = 'q-text' + (q.big ? ' big hj' : '');
+    $('qHelp').textContent = q.ask + (q.help ? '\n' + q.help : '');
     $('feedback').hidden = true;
     $('stamp').hidden = true;
     $('nextBtn').hidden = true;
@@ -669,7 +695,7 @@
     $('qCard').classList.remove('shake', 'thud');
     var body = $('qBody');
     body.innerHTML = '';
-    if (q.type === 'write') {
+    if (!q.choices) {
       var row = el('div', 'write-row');
       var input = el('input');
       input.id = 'wInput';
@@ -681,7 +707,7 @@
       input.setAttribute('spellcheck', 'false');
       input.setAttribute('enterkeyhint', 'done');
       input.setAttribute('aria-label', '답 쓰기');
-      input.placeholder = '여기에 쓰기';
+      input.placeholder = q.type === 'hun-write' ? '훈과 음 (예: 물 수)' : '읽는 소리';
       var btn = el('button', null, '확인');
       btn.id = 'wBtn';
       btn.type = 'button';
@@ -696,15 +722,22 @@
       onEnter(input, submitWrite);
       input.addEventListener('input', function () { err.textContent = ''; });
     } else {
-      var list = el('div', 'choices');
+      var list = el('div', 'choices' + (HANJA_CHOICE[q.type] ? ' hanja' : ''));
       q.choices.forEach(function (ch) {
-        var b = el('button', 'choice' + (q.type === 'm2w' ? ' word' : ''), ch.text);
+        var b = el('button', 'choice word' + (HANJA_CHOICE[q.type] ? ' hj' : ''), ch.text);
         b.type = 'button';
         b.dataset.id = ch.id;
         b.addEventListener('click', function () { pick(b, ch.id); });
         list.appendChild(b);
       });
       body.appendChild(list);
+      if (q.skip) {
+        var skip = el('button', 'choice skip', '잘 모르겠어요');
+        skip.type = 'button';
+        skip.dataset.id = '0';
+        skip.addEventListener('click', function () { pick(skip, 0); });
+        body.appendChild(skip);
+      }
     }
     show('quiz');
   }
@@ -735,52 +768,52 @@
       combo.hidden = true;
     }
   }
-  function setFeedback(ok, starGained, text) {
+  function setFeedback(kind, starGained, text) {
     var fb = $('feedback');
-    fb.className = 'feedback ' + (ok ? 'ok' : 'no');
+    fb.className = 'feedback ' + kind;
     fb.textContent = '';
     if (starGained) fb.appendChild(el('span', 'star-gain', '★ 별 +1'));
     fb.appendChild(document.createTextNode(text));
     fb.hidden = false;
   }
   function wrongNote(q, chosenId) {
-    var c = CARD[q.id], lines = [];
-    if (q.type === 'write') {
-      lines.push('괜찮아요! 정답은 ' + quoted(c.w, '이에요.', '예요.') + ' 한 번 따라 써 볼까요?');
-      if (c.tip) lines.push(c.tip);
-      return lines.join('\n');
+    var right = quoted(q.answer, '이에요.', '예요.');
+    if (q.mode === 'diag') return '정답은 ' + right + ' 내일부터 배워요!';
+    var lines = ['괜찮아요! 정답은 ' + right];
+    if (chosenId && q.type === 'mean') {
+      var w = WORD[chosenId];
+      lines.push('고른 ' + w.w + '(' + w.r + ')' + (hasBatchim(w.r) ? '은' : '는') + ' “' + w.m + '”이에요.');
+    } else if (chosenId && q.type === 'hun-pick') {
+      lines.push('고른 ' + quoted(CHAR[chosenId].hun, '은', '는') + ' ' + CHAR[chosenId].h + '의 훈음이에요.');
+    } else if (chosenId) {
+      lines.push('고른 한자: ' + CHAR[chosenId].h + ' ' + CHAR[chosenId].hun);
     }
-    var o = CARD[chosenId];
-    if (q.type === 'w2m') {
-      lines.push('괜찮아요! ' + quoted(c.w, '은', '는') + ' ' + meaningPhrase(c.m));
-      lines.push('고른 뜻은 ' + quoted(o.w, '이에요.', '예요.'));
-    } else {
-      lines.push('괜찮아요! 정답은 ' + quoted(c.w, '이에요.', '예요.'));
-      lines.push('고른 ' + quoted(o.w, '은', '는') + ' ' + meaningPhrase(o.m));
-    }
-    if (c.cf && c.cf.id === o.id) lines.push(c.cf.d);
-    else if (o.cf && o.cf.id === c.id) lines.push(o.cf.d);
+    lines.push(q.explain);
+    if (!q.choices && q.mode !== 'exam') lines.push('한 번 따라 써 볼까요?');
     return lines.join('\n');
   }
   function answer(correct, chosenId) {
-    var q = S.steps[S.i].q, c = CARD[q.id];
+    var q = S.steps[S.i].q, quick = q.mode === 'diag';
     var before = state.cards[q.id] ? state.cards[q.id].s : null;
     setState(L.recordAnswer(state, q, correct, today()));
     var gained = before !== null && state.cards[q.id].s > before;
     if (correct) {
       S.right++;
       S.combo++;
-      landStamp(q.type === 'write');
-      if (q.type === 'write') sfx.gold(); else sfx.stamp(S.combo);
-      setFeedback(true, gained, c.w + ': ' + c.m);
+      landStamp(!q.choices);
+      if (!q.choices) sfx.gold(); else sfx.stamp(S.combo);
+      setFeedback('ok', gained, quick ? q.show + ' = ' + q.answer : q.explain);
     } else {
       S.combo = 0;
-      var card = $('qCard');
-      card.classList.remove('shake');
-      void card.offsetWidth;
-      card.classList.add('shake');
-      sfx.wrong();
-      setFeedback(false, false, wrongNote(q, chosenId));
+      // 진단에서 모르는 한자는 당연하니까 틀린 소리·흔들기 없이 정답만 보여 준다
+      if (!quick) {
+        var card = $('qCard');
+        card.classList.remove('shake');
+        void card.offsetWidth;
+        card.classList.add('shake');
+        sfx.wrong();
+      }
+      setFeedback(quick ? 'info' : 'no', false, wrongNote(q, chosenId));
     }
     showCombo();
     stepDone(correct);
@@ -795,10 +828,16 @@
     var q = S.steps[S.i].q, ok = L.checkChoice(q, id);
     $('qBody').querySelectorAll('.choice').forEach(function (b) {
       b.disabled = true;
-      if (Number(b.dataset.id) === q.id) b.classList.add('right');
+      if (Number(b.dataset.id) === q.key) b.classList.add('right');
     });
-    if (!ok) btn.classList.add('wrong');
+    if (!ok && id) btn.classList.add('wrong');
     answer(ok, id);
+    if (q.mode === 'diag') {
+      // 진단은 150문제라서 저절로 다음 문제로 넘어간다
+      var at = S.i;
+      autoNext = setTimeout(function () { if (S && S.i === at) advance(); }, ok ? 700 : 1400);
+      return;
+    }
     showNext();
   }
   function submitWrite() {
@@ -814,7 +853,7 @@
         sfx.pop();
         showNext();
       } else {
-        err.textContent = quoted(q.answer, '을', '를') + ' 그대로 따라 써 보세요.';
+        err.textContent = quoted(q.answers[0], '을', '를') + ' 그대로 따라 써 보세요.';
       }
       return;
     }
@@ -822,49 +861,55 @@
     answered = true;
     var ok = L.checkWrite(q, typed);
     answer(ok, null);
-    if (ok) {
+    // 모의고사는 시험처럼 따라 쓰기 없이 바로 다음 문제로
+    if (ok || q.mode === 'exam') {
       input.disabled = true;
       $('wBtn').disabled = true;
       showNext();
     } else {
       copyMode = true;
       input.value = '';
-      input.placeholder = q.answer + ' 따라 쓰기';
+      input.placeholder = q.answers[0] + ' 따라 쓰기';
     }
   }
   $('nextBtn').addEventListener('click', function () { if (S) advance(); });
 
   // ---------- 결과 ----------
   var resultAction = 'home';
+  var RESULT_TITLE = { daily: '오늘의 첫 번째 공부 끝!', review: '두 번째 공부 끝!', diag: '실력 진단 끝!', mock: '모의고사 끝!' };
   // 기록은 마지막 문제를 풀 때 이미 저장했다(stepDone). 여기서는 결과만 보여 준다
   function finish() {
+    clearTimeout(autoNext);
     $('progressFill').style.width = '100%';
-    if (S.kind === 'exam') {
-      S = null;
-      showHong(true);
-      return;
-    }
     $('qCard').hidden = true;
     $('nextBtn').hidden = true;
     $('combo').hidden = true;
     $('qCount').textContent = '끝!';
-    $('resultTitle').textContent = S.kind === 'daily' ? '오늘의 첫 번째 공부 끝!'
-      : S.kind === 'review' ? '두 번째 공부 끝!' : '연습 끝!';
+    var kind = S.kind;
+    $('resultTitle').textContent = RESULT_TITLE[kind] || '연습 끝!';
     $('score').textContent = S.right + ' / ' + S.total;
     var gainedStars = L.totalStars(state) - S.starsBefore, gain = [];
+    var known = Object.keys(state.cards).filter(function (id) { return state.cards[id].k; }).length;
+    if (kind === 'diag') gain.push('아는 한자 ' + known + '자');
     if (gainedStars > 0) gain.push('별 +' + gainedStars);
-    if (S.newCards) gain.push('새 카드 ' + S.newCards + '장');
+    if (S.newCards) gain.push('새 한자 ' + S.newCards + '자');
     $('resultGain').textContent = gain.join(' · ');
     $('resultGain').hidden = !gain.length;
-    var needSticker = S.kind === 'daily' || S.kind === 'review';
-    $('resultNote').textContent = !needSticker
-      ? '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.'
-      : S.kind === 'daily'
-        ? '⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부(복습)도 해요!'
-        : '오늘 두 번째 칸에도 ⭐가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?';
-    $('resultNote').hidden = !$('resultNote').textContent;
-    resultAction = needSticker ? 'sticker' : 'home';
-    $('resultBtn').textContent = needSticker ? '스티커 고르러 가기' : '홈으로';
+    var pm = L.passMark(S.total), passedNow = kind === 'mock' && S.right >= pm;
+    var note = {
+      practice: '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.',
+      diag: '벌써 아는 한자가 ' + known + '자! 남은 ' + (D.CHARS.length - Object.keys(state.cards).length) +
+        '자는 내일부터 9일 동안 나눠서 배워요. ⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부도 해요!',
+      daily: L.allDone(state) ? L.LAST_DAY + '일 공부를 모두 마쳤어요! 시험도 장원급제예요!'
+        : '⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부(복습)도 해요!',
+      review: '오늘 두 번째 칸에도 ⭐가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?',
+      mock: passedNow ? '합격 점수(' + pm + '문제)를 넘었어요! 홍패를 받아요.'
+        : '합격까지 ' + (pm - S.right) + '문제 더! 틀린 한자는 두 번째 공부에서 다시 나와요.'
+    }[kind] || '';
+    $('resultNote').textContent = note;
+    $('resultNote').hidden = !note;
+    resultAction = kind === 'practice' ? 'home' : kind === 'mock' ? (passedNow ? 'hong' : 'home') : 'sticker';
+    $('resultBtn').textContent = { sticker: '스티커 고르러 가기', hong: '홍패 받으러 가기', home: '홈으로' }[resultAction];
     $('result').hidden = false;
     S = null;
     sfx.fanfare();
@@ -872,18 +917,27 @@
   }
   $('resultBtn').addEventListener('click', function () {
     if (resultAction === 'sticker') showSticker();
+    else if (resultAction === 'hong') showHong(true);
     else goHome();
   });
 
   // ---------- 스티커 ----------
   var chosenSticker = null;
+  function nextDayHint(day) {
+    var next = Q.planType(day + 1, D);
+    if (day >= L.LAST_DAY) return '';
+    if (next === 'mock' && Q.planType(day, D) !== 'mock') return ' 다음 날부터는 모의고사예요!';
+    if (next === 'dok' && Q.planType(day, D) === 'new') return ' 150자를 다 배웠어요! 다음 날부터는 한자어 읽기 집중이에요.';
+    if (next === 'light') return ' 다음 날은 시험 전 마지막 공부예요.';
+    return '';
+  }
   function lastSticker() { return state.stickers[state.stickers.length - 1]; }
   function showSticker() {
     var last = lastSticker();
     chosenSticker = null;
     $('stickerErr').textContent = '';
     var sub = last.day + '일째 ' + (last.k === 'review' ? '아래' : '위') + ' 칸의 ⭐를 원하는 스티커로 바꿔요.';
-    if (last.k === 'review' && last.day + 1 === L.LAST_DAY) sub += ' 다음은 과거 시험이에요!';
+    if (last.k === 'review') sub += nextDayHint(last.day);
     $('stickerSub').textContent = sub;
     var box = $('stickers');
     box.innerHTML = '';
@@ -911,7 +965,7 @@
     goHome();
     var msg = last.day + '일째 ' + (last.k === 'review' ? '두 번째' : '첫 번째') + ' 스티커를 붙였어요!';
     if (last.k === 'main') msg += ' 조금 쉬었다가 두 번째 공부도 해요.';
-    else if (last.day + 1 === L.LAST_DAY) msg += ' 다음은 과거 시험이에요!';
+    else msg += nextDayHint(last.day);
     toast(msg);
   });
 
@@ -951,7 +1005,7 @@
     wheel.style.transform = 'rotate(' + deg + 'deg)';
   }
   function showPrize() {
-    if (!state.exam) { toast('과거 시험을 마치면 선물 룰렛을 돌릴 수 있어요.'); return; }
+    if (!L.passedMock(state)) { toast('모의고사에서 합격 점수를 받으면 선물 룰렛을 돌릴 수 있어요.'); return; }
     buildWheel();
     spinning = false;
     $('prizeSlot').innerHTML = '';
@@ -967,7 +1021,7 @@
     show('prize');
   }
   function spin() {
-    if (spinning || state.prize || !state.exam) return;
+    if (spinning || state.prize || !L.passedMock(state)) return;
     spinning = true;
     // 결과를 먼저 저장해서, 돌리는 중에 화면을 닫아도 다시 돌릴 수 없게 한다
     setState(L.pickPrize(state, D.PRIZES, Math.random, today()));
@@ -993,12 +1047,13 @@
   $('hongGift').addEventListener('click', showPrize);
 
   // ---------- 홍패 ----------
+  // 홍패에는 가장 잘 본 모의고사 점수를 쓴다
   function showHong(fresh) {
-    var e = state.exam;
-    if (!e) return;
-    $('hongTitle').textContent = '사자성어 과거 시험 ' + L.examTitle(e.score, e.total);
+    var e = L.bestMock(state);
+    if (!e || !L.passedMock(state)) return;
+    $('hongTitle').textContent = '한자 7급 모의고사 ' + (L.examTitle(e.score, e.total) || '합격');
     $('hongName').textContent = state.name;
-    $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답';
+    $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답 (합격 ' + L.passMark(e.total) + '문제)';
     $('hongDate').textContent = longDate(e.d);
     $('hongCoupon').hidden = !state.prize;
     $('hongReward').textContent = state.prize ? state.prize.item : '';
@@ -1178,8 +1233,8 @@
     }
     pendingRestore = dec;
     msg('pRestoreMsg', '');
-    $('pRestoreInfo').textContent = (dec.name || '이름 없음') + '의 기록이에요. 스티커 ' + dec.stickers.length + '장, 카드 ' +
-      Object.keys(dec.cards).length + '장, 별 ' + L.totalStars(dec) + '개. 지금 기록 대신 이 기록을 쓸까요?';
+    $('pRestoreInfo').textContent = (dec.name || '이름 없음') + '의 기록이에요. 스티커 ' + dec.stickers.length + '장, 한자 ' +
+      Object.keys(dec.cards).length + '자, 별 ' + L.totalStars(dec) + '개. 지금 기록 대신 이 기록을 쓸까요?';
     $('pRestoreConfirm').hidden = false;
   });
   $('pRestoreYes').addEventListener('click', function () {
