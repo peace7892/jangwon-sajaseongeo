@@ -244,6 +244,25 @@ p { margin: 0; }
 .result .score { font-family: var(--font-display); font-size: 3rem; color: var(--cheong); line-height: 1; font-variant-numeric: tabular-nums; }
 .result .gain { font-size: 1.1rem; color: var(--hwang-deep); background: var(--hwang-soft); border-radius: 999px; padding: 4px 16px; }
 .result .note { color: var(--ink-soft); }
+/* 실전 시험: 오른쪽 위 시계(남은 시간만큼 색칠된 동그라미가 줄어든다)와 틀린 문제 목록 */
+#v-quiz > .top-row { position: sticky; top: 0; z-index: 5; background: var(--paper); padding-block: 8px; margin-block: -8px; }
+.timer { --p: 1; --c: var(--cheong); margin-left: auto; flex: none; width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--c) calc(var(--p) * 360deg), var(--grey) 0deg); }
+.timer span { width: 58px; height: 58px; border-radius: 50%; background: var(--card); display: grid; place-items: center;
+  font-family: var(--font-display); font-size: 1.1rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.timer.warn { --c: var(--hwang); }
+.timer.danger { --c: var(--ju); }
+.timer.danger span { color: var(--ju); }
+.choice.picked { border-color: var(--nam); background: #E4E8F5; color: var(--nam); }
+.miss-list { width: 100%; display: grid; gap: 8px; text-align: left; }
+.miss-list h3 { font-size: 1.25rem; color: var(--ju); margin-top: 6px; }
+.miss { display: flex; gap: 14px; align-items: center; background: var(--paper); border-radius: 12px; padding: 8px 14px; }
+.miss-q { flex: 0 1 42%; min-width: 0; font-family: var(--font-display); font-size: 1rem; overflow-wrap: anywhere; }
+.miss-q.hj { font-family: var(--font-hanja); font-size: 1.7rem; line-height: 1.2; }
+.miss-a { display: grid; min-width: 0; font-size: 0.95rem; overflow-wrap: anywhere; }
+.miss-a small { color: var(--ink-soft); }
+.miss-a b { color: var(--cheong-deep); font-weight: 400; font-family: var(--font-display); }
+.miss-time { color: var(--ink-soft); text-align: center; }
 
 /* 스티커 */
 .stickers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
@@ -361,7 +380,7 @@ p { margin: 0; }
     <div class="panel">
       <div class="panel-head"><h2>스티커판</h2><span id="boardCount"></span></div>
       <div class="board" id="board"></div>
-      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 16~20일째는 모의고사! 합격하면 마지막 칸 🎁 선물 룰렛이 열려요.</p>
+      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 11월 10~14일은 50분 실전 시험! 합격하면 마지막 칸 🎁 선물 룰렛이 열려요.</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>한자 도감</h2><span id="dogamCount"></span></div>
@@ -396,6 +415,7 @@ p { margin: 0; }
     <div class="top-row">
       <span class="q-count" id="qCount"></span>
       <span class="combo" id="combo" hidden></span>
+      <div class="timer" id="timer" role="timer" hidden><span id="timerText"></span></div>
       <button class="quiet-btn" type="button" data-go="home">그만하기</button>
     </div>
     <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
@@ -414,6 +434,7 @@ p { margin: 0; }
       <p class="gain" id="resultGain"></p>
       <p class="note" id="resultNote"></p>
       <button class="go-btn" id="resultBtn" type="button"></button>
+      <div class="miss-list" id="resultList" hidden></div>
     </div>
   </section>
 

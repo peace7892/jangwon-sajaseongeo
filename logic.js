@@ -101,25 +101,44 @@
   }
 
   // ---------- 이어서 하기 ----------
-  function startSession(state, built, today) {
+  // 시간 제한이 있는 공부(실전 시험)는 시작한 순간부터 시계가 흐른다. 앱을 나가도 멈추지 않는다
+  function startSession(state, built, today, now) {
     var next = clone(state);
     next.session = {
       d: today, kind: built.kind, day: built.day, steps: built.steps, i: 0, right: 0,
       newCards: built.steps.filter(function (s) { return s.t === 'card'; }).length,
       starsBefore: totalStars(state)
     };
+    if (built.minutes) {
+      next.session.ends = now + built.minutes * 60000;
+      next.session.miss = [];
+    }
     return next;
   }
-  function advanceSession(state, correct) {
+  // 시간 제한이 있으면 틀리거나 넘긴 문제와 아이가 쓴 답을 남겨 결과에서 보여 준다
+  function advanceSession(state, correct, given) {
     if (!state.session) return state;
     var next = clone(state);
+    if (next.session.miss && !correct) next.session.miss.push({ i: next.session.i, a: String(given == null ? '' : given) });
     next.session.i += 1;
     if (correct) next.session.right += 1;
     return next;
   }
-  function activeSession(state, today) {
+  function timeLeft(state, now) {
     var s = state.session;
+    return s && s.ends ? Math.max(0, s.ends - now) : null;
+  }
+  function activeSession(state, today, now) {
+    var s = state.session;
+    if (s && s.ends && now != null && now >= s.ends) return null;
     return s && s.d === today && s.i < s.steps.length ? s : null;
+  }
+  // 시간이 다 된 실전 시험은 거기서 채점한다. 못 푼 문제는 틀린 것. 시험 본 날짜로 기록한다
+  function closeExpiredMock(state, now) {
+    var s = state.session;
+    if (!s || s.kind !== 'mock' || !s.ends || now < s.ends) return state;
+    var total = s.steps.filter(function (x) { return x.t === 'q'; }).length;
+    return endSession(recordMock(state, s.right, total, s.d));
   }
   function endSession(state) {
     if (!state.session) return state;
@@ -246,10 +265,17 @@
     if (!Array.isArray(x.steps) || !x.steps.length || x.steps.length > 300 || !x.steps.every(validStep)) return null;
     var i = Number(x.i), right = Number(x.right);
     if (!(i >= 0 && i <= x.steps.length) || !(right >= 0 && right <= i)) return null;
-    return {
+    var out = {
       d: x.d, kind: x.kind, day: Number(x.day) || 1, steps: x.steps, i: i, right: right,
       newCards: Number(x.newCards) || 0, starsBefore: Number(x.starsBefore) || 0
     };
+    if (typeof x.ends === 'number' && isFinite(x.ends)) {
+      out.ends = x.ends;
+      out.miss = (Array.isArray(x.miss) ? x.miss : []).filter(function (m) {
+        return m && isNum(m.i, 0, x.steps.length - 1) && typeof m.a === 'string';
+      }).map(function (m) { return { i: m.i, a: m.a.slice(0, 40) }; });
+    }
+    return out;
   }
   function sanitize(obj) {
     if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
@@ -323,6 +349,7 @@
     dueIds: dueIds, totalStars: totalStars, rankOf: rankOf, markKnown: markKnown,
     recordAnswer: recordAnswer, learnCard: learnCard,
     startSession: startSession, advanceSession: advanceSession, activeSession: activeSession, endSession: endSession,
+    timeLeft: timeLeft, closeExpiredMock: closeExpiredMock,
     doneToday: doneToday, reviewDoneToday: reviewDoneToday, canReview: canReview, allDone: allDone,
     studyDay: studyDay, addSticker: addSticker,
     finishDaily: finishDaily, finishReview: finishReview, setTodaySticker: setTodaySticker,

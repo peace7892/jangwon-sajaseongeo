@@ -11,7 +11,6 @@
   var REVIEW_SESSION_SIZE = 15; // 두 번째 공부 문제 수
   var REVIEW_SESSION_MAX = 20;
   var TASTE = 5;                // 진단 날 아는 글자가 적으면 미리 맛보는 새 글자 수
-  var LIGHT_SIZE = 15;
   // 실제 시험 70문항 중 필순 2문항을 뺀 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2
   var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2 };
 
@@ -128,6 +127,12 @@
 
   // ---------- 하루 공부 ----------
   function planType(day, data) { return data.PLAN[Math.max(0, Math.min(data.PLAN.length, day) - 1)]; }
+  // 오늘 할 공부: 시험 전 5일(MOCK_FROM부터)은 날짜로 실전 시험, 그 전에는 공부한 날 수로 계획을 따른다
+  function dayType(state, today, data) {
+    if (today >= data.MOCK_FROM) return 'mock';
+    var type = planType(L.studyDay(state, today), data);
+    return type === 'mock' ? 'dok' : type;
+  }
   // 오늘 새로 배울 글자 수: 모르는 글자를 남은 새 한자 날에 나눠서(최소 5자). 새 한자 날이 지나면 빠진 글자를 따라잡는다
   function newPerDay(state, day, data) {
     var unknown = unknownIds(state, data).length;
@@ -167,7 +172,7 @@
     return steps;
   }
   function buildDay(state, today, data, rng) {
-    var day = L.studyDay(state, today), type = planType(day, data);
+    var day = L.studyDay(state, today), type = dayType(state, today, data);
     if (L.doneToday(state, today) || L.allDone(state)) {
       return { kind: 'daily', day: day, steps: buildPractice(state, data, MIN_QUESTIONS, rng) };
     }
@@ -176,15 +181,9 @@
         return step(makeHunPick(charOf(data, id), data, rng, 'diag'));
       }) };
     }
-    if (type === 'mock') return { kind: 'mock', day: day, steps: buildMock(state, data, rng) };
+    if (type === 'mock') return { kind: 'mock', day: day, minutes: data.EXAM_MINUTES, steps: buildMock(state, data, rng) };
 
     var steps = [], used = {};
-    if (type === 'light') {
-      weakestFirst(L.learnedIds(state), state, rng).slice(0, LIGHT_SIZE).forEach(function (id) {
-        steps.push(step(reviewQuestion(state, id, data, rng, 'review')));
-      });
-      return { kind: 'daily', day: day, steps: steps };
-    }
     L.dueIds(state, today, type === 'new' ? DAY_REVIEW_CAP : L.REVIEW_CAP).forEach(function (id) {
       used[id] = true;
       steps.push(step(reviewQuestion(state, id, data, rng, 'review')));
@@ -244,7 +243,7 @@
   var Quiz = {
     makeHunPick: makeHunPick, makeHunWrite: makeHunWrite, makeDokWrite: makeDokWrite,
     makeOpp: makeOpp, makeIdiom: makeIdiom, makeMean: makeMean, reviewQuestion: reviewQuestion,
-    planType: planType, newPerDay: newPerDay, wordsWith: wordsWith,
+    planType: planType, dayType: dayType, newPerDay: newPerDay, wordsWith: wordsWith,
     buildDay: buildDay, buildReview: buildReview, buildMock: buildMock, buildPractice: buildPractice
   };
   if (typeof module === 'object' && module.exports) module.exports = Quiz;

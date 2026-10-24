@@ -4,7 +4,7 @@
   var D = window.DATA, L = window.Logic, Q = window.Quiz;
   var KEY = 'jangwon-hanja-v1';
   var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '10.24-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '10.24-2';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -281,11 +281,15 @@
     });
   }
   function goHome() {
+    var leftExam = S && S.kind === 'mock' && !$('v-quiz').hidden && $('result').hidden;
+    stopClock();
     S = null;
     renderStorageWarn();
     if (!state.name) { show('name'); return; }
+    if (showExpiredExam()) return;
     renderHome();
     show('home');
+    if (leftExam) toast('실전 시험 시간은 계속 흘러요. “이어서 보기”로 돌아가요.');
   }
   document.addEventListener('click', function (e) {
     if (e.target.closest('[data-go="home"]')) goHome();
@@ -295,7 +299,9 @@
     if (syncFromStorage()) {
       if (S) toast('다른 창에서 한 공부를 불러왔어요.');
       goHome();
-    } else if (!S && !$('v-home').hidden) {
+    } else if (S && S.ends) {
+      renderClock();
+    } else if (!S && !$('v-home').hidden && !showExpiredExam()) {
       renderHome();
     }
   });
@@ -391,7 +397,7 @@
   }
 
   function renderStart(t) {
-    var finished = L.allDone(state), done = L.doneToday(state, t), act = L.activeSession(state, t);
+    var finished = L.allDone(state), done = L.doneToday(state, t), act = L.activeSession(state, t, Date.now());
     var review = L.canReview(state, t);
     if (!act && (finished || (done && !review))) {
       $('startBtn').hidden = true;
@@ -413,18 +419,18 @@
       var qTotal = act.steps.filter(isQ).length;
       var qDone = act.steps.slice(0, act.i).filter(isQ).length;
       var cardsLeft = act.steps.slice(act.i).filter(isCard).length;
-      $('startMain').textContent = act.kind === 'mock' ? '모의고사 이어서 보기' : act.kind === 'diag' ? '실력 진단 이어서 하기'
+      $('startMain').textContent = act.kind === 'mock' ? '실전 시험 이어서 보기' : act.kind === 'diag' ? '실력 진단 이어서 하기'
         : act.kind === 'review' ? '두 번째 공부 이어서 하기' : '이어서 하기';
       $('startSub').textContent = cardsLeft
         ? '새 한자 ' + cardsLeft + '자 남았어요'
-        : '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
+        : (act.ends ? '남은 시간 ' + clockText(L.timeLeft(state, Date.now())) + ' · ' : '') + '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
       return;
     }
     var day = L.studyDay(state, t);
     if (review) {
       var rq = Q.buildReview(state, t, D, Math.random).steps.filter(isQ).length;
       $('startMain').textContent = '두 번째 공부 시작';
-      $('startSub').textContent = { diag: '안다고 고른 한자 써 보기', mock: '모의고사에서 틀린 한자 + 복습' }[Q.planType(day, D)] ||
+      $('startSub').textContent = { diag: '안다고 고른 한자 써 보기', mock: '실전 시험에서 틀린 한자 + 복습' }[Q.dayType(state, t, D)] ||
         '오늘 배운 한자 다시 쓰기 + 복습';
       $('startSub').textContent += ' · ' + rq + '문제';
       return;
@@ -437,8 +443,8 @@
       return;
     }
     if (preview.kind === 'mock') {
-      $('startMain').textContent = '모의고사 보러 가기';
-      $('startSub').textContent = day + '일째 · ' + total + '문제 · ' + L.passMark(total) + '문제 넘게 맞히면 합격!';
+      $('startMain').textContent = '실전 시험 보러 가기';
+      $('startSub').textContent = '기출 형식 ' + total + '문제 · ' + D.EXAM_MINUTES + '분 · ' + L.passMark(total) + '문제 이상 맞히면 합격!';
       return;
     }
     var reviews = preview.steps.filter(function (s) { return isQ(s) && s.q.mode === 'review'; }).length;
@@ -446,7 +452,7 @@
     var parts = [day + '일째'];
     if (reviews) parts.push('복습 ' + reviews + '문제');
     if (cards) parts.push('새 한자 ' + cards + '자');
-    if (total - reviews - cards * 3 > 0 && !cards) parts.push((Q.planType(day, D) === 'dok' ? '한자어 읽기·유형 ' : '연습 ') + (total - reviews) + '문제');
+    if (total - reviews - cards * 3 > 0 && !cards) parts.push((Q.dayType(state, t, D) === 'dok' ? '한자어 읽기·유형 ' : '연습 ') + (total - reviews) + '문제');
     $('startMain').textContent = '오늘의 공부 시작';
     $('startSub').textContent = parts.join(' · ');
   }
@@ -469,7 +475,7 @@
     board.appendChild(cells);
     justStuckKey = '';
   }
-  var DAY_TAG = { diag: '진단', mock: '모의' };
+  var DAY_TAG = { diag: '진단', mock: '실전' };
   function cellFor(d, kind, isToday) {
     var sticker = state.stickers.filter(function (s) { return (s.k === 'review') === (kind === 'review') && s.day === d; })[0];
     var type = Q.planType(d, D), tag = kind === 'main' && DAY_TAG[type];
@@ -487,7 +493,7 @@
     }
     if (!sticker && isToday) c.classList.add('today');
     if (tag) c.appendChild(el('span', 'tag', tag));
-    c.setAttribute('aria-label', d + '일째 ' + (kind === 'review' ? '두 번째 공부' : type === 'mock' ? '모의고사' : '첫 번째 공부') + (sticker ? ' 스티커' : ''));
+    c.setAttribute('aria-label', d + '일째 ' + (kind === 'review' ? '두 번째 공부' : type === 'mock' ? '실전 시험' : '첫 번째 공부') + (sticker ? ' 스티커' : ''));
     return c;
   }
   function giftCell() {
@@ -499,7 +505,7 @@
     }
     c.appendChild(el('span', 'stk', '🎁'));
     c.appendChild(el('span', 'tag', state.prize ? '받았음' : open ? '열기!' : '선물'));
-    c.setAttribute('aria-label', '선물 룰렛' + (open ? '' : ', 모의고사에 합격하면 열려요'));
+    c.setAttribute('aria-label', '선물 룰렛' + (open ? '' : ', 실전 시험에 합격하면 열려요'));
     return c;
   }
 
@@ -541,14 +547,15 @@
     sfx.pop();
   });
   $('startBtn').addEventListener('click', function () {
-    var t = today(), act = L.activeSession(state, t);
+    if (showExpiredExam()) return;
+    var t = today(), act = L.activeSession(state, t, Date.now());
     if (act) { beginSession(act); return; }
     var built;
     if (L.canReview(state, t)) built = Q.buildReview(state, t, D, Math.random);
     else if (!L.doneToday(state, t) && !L.allDone(state)) built = Q.buildDay(state, t, D, Math.random);
     else { renderHome(); return; }
     if (!built.steps.length) { renderHome(); return; }
-    setState(L.startSession(state, built, t));
+    setState(L.startSession(state, built, t, Date.now()));
     beginSession(state.session);
   });
   $('practiceBtn').addEventListener('click', function () { startPractice(10); });
@@ -556,7 +563,7 @@
   $('parentLink').addEventListener('click', showLock);
 
   // ---------- 공부 진행 ----------
-  // 오늘의 공부·진단·모의고사는 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
+  // 오늘의 공부·진단·실전 시험은 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
   // 연습 문제는 저장하지 않는다.
   function beginSession(saved) {
     if (!saved.steps.length) { toast('먼저 오늘의 공부로 한자를 배워 보세요.'); return; }
@@ -566,21 +573,73 @@
       total: saved.steps.filter(isQ).length,
       newCards: saved.newCards != null ? saved.newCards : saved.steps.filter(isCard).length,
       starsBefore: saved.starsBefore != null ? saved.starsBefore : L.totalStars(state),
-      persist: saved.kind !== 'practice'
+      persist: saved.kind !== 'practice',
+      ends: saved.ends || null, miss: (saved.miss || []).slice(), warned: {}
     };
     $('combo').hidden = true;
-    runStep();
+    startClock();
+    if (S) runStep();
   }
+  // ---------- 실전 시험 시계 ----------
+  // 오른쪽 위 동그라미가 50분 동안 줄어든다. 시간은 기록의 끝나는 시각(ends)으로 계산해서 앱을 나갔다 와도 맞다
+  var clockTimer = null;
+  function clockText(ms) {
+    var sec = Math.ceil(ms / 1000), r = sec % 60;
+    return Math.floor(sec / 60) + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function stopClock() { clearInterval(clockTimer); clockTimer = null; }
+  function startClock() {
+    stopClock();
+    $('timer').hidden = !S.ends;
+    if (!S.ends) return;
+    renderClock();
+    if (S) clockTimer = setInterval(renderClock, 1000);
+  }
+  function renderClock() {
+    if (!S || !S.ends) return;
+    var full = D.EXAM_MINUTES * 60000, left = Math.max(0, S.ends - Date.now()), min = left / 60000, fresh = 0;
+    $('timer').style.setProperty('--p', (left / full).toFixed(4));
+    $('timer').className = 'timer' + (min <= 5 ? ' danger' : min <= 10 ? ' warn' : '');
+    $('timerText').textContent = clockText(left);
+    $('timer').setAttribute('aria-label', '남은 시간 ' + Math.ceil(min) + '분');
+    if (left <= 0) { timeUp(); return; }
+    [10, 5, 1].forEach(function (m) {
+      if (min <= m && !S.warned[m]) { S.warned[m] = true; fresh = m; }
+    });
+    if (fresh) { toast(fresh + '분 남았어요!'); sfx.pop(); }
+  }
+  // 50분이 다 되면 더 풀 수 없고 그 자리에서 채점한다
+  function timeUp() {
+    stopClock();
+    clearTimeout(autoNext);
+    if (answered) S.i++;      // 방금 답한 문제는 푼 문제로 센다
+    S.timedOut = true;
+    setState(L.closeExpiredMock(state, Date.now()));
+    toast('시간이 끝났어요! 채점할게요.');
+    finish();
+  }
+  // 시험 중에 나갔다가 시간이 다 지난 뒤 돌아오면 바로 채점 결과를 보여 준다
+  function showExpiredExam() {
+    var s = state.session, now = Date.now();
+    if (!s || s.kind !== 'mock' || !s.ends || now < s.ends) return false;
+    S = { kind: 'mock', steps: s.steps, i: s.i, right: s.right, total: s.steps.filter(isQ).length, qn: 0, combo: 0,
+      newCards: 0, starsBefore: s.starsBefore, persist: true, ends: s.ends, miss: (s.miss || []).slice(), warned: {}, timedOut: true };
+    setState(L.closeExpiredMock(state, now));
+    finish();
+    return true;
+  }
+
   function startPractice(n) {
     beginSession({ kind: 'practice', steps: Q.buildPractice(state, D, n, Math.random) });
   }
   // 카드 한 장이나 문제 하나를 마칠 때마다 부른다. 마지막 단계면 그 자리에서 오늘을 마친 것으로 기록한다
-  function stepDone(correct) {
+  function stepDone(correct, given) {
     if (!S.persist) return;
-    setState(L.advanceSession(state, correct));
+    if (S.ends && !correct) S.miss.push({ i: S.i, a: String(given == null ? '' : given) });
+    setState(L.advanceSession(state, correct, given));
     if (S.i + 1 < S.steps.length) return;
     var t = today();
-    if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, t)));
+    if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, state.session.d)));
     else if (S.kind === 'review') setState(L.endSession(L.finishReview(state, t)));
     else setState(L.endSession(L.finishDaily(state, t)));
   }
@@ -672,7 +731,7 @@
 
   // ---------- 문제 ----------
   var TYPE_LABEL = { 'hun-pick': '훈음 고르기', 'hun-write': '훈음 쓰기', 'dok-write': '한자어 읽기', opp: '반대 한자', idiom: '성어 완성', mean: '뜻풀이' };
-  var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '모의고사', diag: '실력 진단' };
+  var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '실전 시험', diag: '실력 진단' };
   var HANJA_CHOICE = { opp: 1, idiom: 1, mean: 1 };
   var answered = false, copyMode = false, autoNext = null;
 
@@ -739,7 +798,31 @@
         body.appendChild(skip);
       }
     }
+    if (q.mode === 'exam') {
+      var pass = el('button', 'choice skip', '넘어가기');
+      pass.type = 'button';
+      pass.addEventListener('click', function () {
+        if (answered) return;
+        answered = true;
+        examNext(pass, false, '', false);
+      });
+      body.appendChild(pass);
+    }
     show('quiz');
+    if (q.mode === 'exam' && !q.choices) $('wInput').focus();
+  }
+  // 실전 시험: 시험처럼 맞았는지 알려 주지 않고 바로 다음 문제로. 틀린 문제는 끝나고 한꺼번에 보여 준다
+  function examNext(btn, ok, given, wait) {
+    var q = S.steps[S.i].q;
+    if (btn) btn.classList.add('picked');
+    $('qBody').querySelectorAll('button, input').forEach(function (x) { x.disabled = true; });
+    setState(L.recordAnswer(state, q, ok, today()));
+    if (ok) S.right++;
+    sfx.pop();
+    stepDone(ok, given);
+    if (!wait) { advance(); return; }
+    var at = S.i;
+    autoNext = setTimeout(function () { if (S && S.i === at) advance(); }, 250);
   }
 
   function landStamp(gold) {
@@ -826,6 +909,10 @@
     if (answered) return;
     answered = true;
     var q = S.steps[S.i].q, ok = L.checkChoice(q, id);
+    if (q.mode === 'exam') {
+      examNext(btn, ok, q.choices.filter(function (c) { return c.id === id; })[0].text, true);
+      return;
+    }
     $('qBody').querySelectorAll('.choice').forEach(function (b) {
       b.disabled = true;
       if (Number(b.dataset.id) === q.key) b.classList.add('right');
@@ -860,9 +947,9 @@
     if (answered) return;
     answered = true;
     var ok = L.checkWrite(q, typed);
+    if (q.mode === 'exam') { examNext(null, ok, input.value.trim(), false); return; }
     answer(ok, null);
-    // 모의고사는 시험처럼 따라 쓰기 없이 바로 다음 문제로
-    if (ok || q.mode === 'exam') {
+    if (ok) {
       input.disabled = true;
       $('wBtn').disabled = true;
       showNext();
@@ -876,17 +963,19 @@
 
   // ---------- 결과 ----------
   var resultAction = 'home';
-  var RESULT_TITLE = { daily: '오늘의 첫 번째 공부 끝!', review: '두 번째 공부 끝!', diag: '실력 진단 끝!', mock: '모의고사 끝!' };
+  var RESULT_TITLE = { daily: '오늘의 첫 번째 공부 끝!', review: '두 번째 공부 끝!', diag: '실력 진단 끝!', mock: '실전 시험 끝!' };
   // 기록은 마지막 문제를 풀 때 이미 저장했다(stepDone). 여기서는 결과만 보여 준다
   function finish() {
     clearTimeout(autoNext);
+    stopClock();
+    $('timer').hidden = true;
     $('progressFill').style.width = '100%';
     $('qCard').hidden = true;
     $('nextBtn').hidden = true;
     $('combo').hidden = true;
     $('qCount').textContent = '끝!';
     var kind = S.kind;
-    $('resultTitle').textContent = RESULT_TITLE[kind] || '연습 끝!';
+    $('resultTitle').textContent = S.timedOut ? '시간 끝! 채점했어요' : RESULT_TITLE[kind] || '연습 끝!';
     $('score').textContent = S.right + ' / ' + S.total;
     var gainedStars = L.totalStars(state) - S.starsBefore, gain = [];
     var known = Object.keys(state.cards).filter(function (id) { return state.cards[id].k; }).length;
@@ -903,17 +992,41 @@
       daily: L.allDone(state) ? L.LAST_DAY + '일 공부를 모두 마쳤어요! 시험도 장원급제예요!'
         : '⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부(복습)도 해요!',
       review: '오늘 두 번째 칸에도 ⭐가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?',
-      mock: passedNow ? '합격 점수(' + pm + '문제)를 넘었어요! 홍패를 받아요.'
-        : '합격까지 ' + (pm - S.right) + '문제 더! 틀린 한자는 두 번째 공부에서 다시 나와요.'
+      mock: passedNow ? '합격 점수(' + pm + '문제 이상)를 받았어요! 홍패를 받아요.'
+        : '합격까지 ' + (pm - S.right) + '문제 더! 틀린 한자는 오늘 두 번째 공부에서 다시 나와요.'
     }[kind] || '';
     $('resultNote').textContent = note;
     $('resultNote').hidden = !note;
     resultAction = kind === 'practice' ? 'home' : kind === 'mock' ? (passedNow ? 'hong' : 'home') : 'sticker';
     $('resultBtn').textContent = { sticker: '스티커 고르러 가기', hong: '홍패 받으러 가기', home: '홈으로' }[resultAction];
+    if (kind === 'mock') renderMissList(S);
+    else $('resultList').hidden = true;
     $('result').hidden = false;
     S = null;
     sfx.fanfare();
     show('quiz');
+  }
+  // 실전 시험 결과: 걸린 시간, 틀린 문제(문제 · 내 답 · 정답), 시간이 끝나 못 푼 문제 수
+  function renderMissList(X) {
+    var box = $('resultList'), solved = X.steps.slice(0, X.i).filter(isQ).length;
+    var used = Math.min(Date.now(), X.ends) - (X.ends - D.EXAM_MINUTES * 60000);
+    box.innerHTML = '';
+    box.appendChild(el('p', 'miss-time', '걸린 시간 ' + Math.floor(used / 60000) + '분 ' + (Math.floor(used / 1000) % 60) + '초' +
+      (X.total > solved ? ' · 시간이 끝나서 못 푼 문제 ' + (X.total - solved) + '개' : '')));
+    if (X.miss.length) {
+      box.appendChild(el('h3', null, '틀린 문제 ' + X.miss.length + '개'));
+      X.miss.forEach(function (m) {
+        var q = X.steps[m.i].q, row = el('div', 'miss');
+        row.appendChild(el('span', 'miss-q' + (q.big ? ' hj' : ''), q.show));
+        var info = el('span', 'miss-a');
+        info.appendChild(el('small', null, TYPE_LABEL[q.type]));
+        info.appendChild(el('span', null, '내 답: ' + (m.a || '(넘김)')));
+        info.appendChild(el('b', null, '정답: ' + q.answer));
+        row.appendChild(info);
+        box.appendChild(row);
+      });
+    }
+    box.hidden = false;
   }
   $('resultBtn').addEventListener('click', function () {
     if (resultAction === 'sticker') showSticker();
@@ -926,9 +1039,8 @@
   function nextDayHint(day) {
     var next = Q.planType(day + 1, D);
     if (day >= L.LAST_DAY) return '';
-    if (next === 'mock' && Q.planType(day, D) !== 'mock') return ' 다음 날부터는 모의고사예요!';
+    if (L.addDays(today(), 1) === D.MOCK_FROM) return ' 내일부터는 ' + D.EXAM_MINUTES + '분 실전 시험이에요!';
     if (next === 'dok' && Q.planType(day, D) === 'new') return ' 150자를 다 배웠어요! 다음 날부터는 한자어 읽기 집중이에요.';
-    if (next === 'light') return ' 다음 날은 시험 전 마지막 공부예요.';
     return '';
   }
   function lastSticker() { return state.stickers[state.stickers.length - 1]; }
@@ -1005,7 +1117,7 @@
     wheel.style.transform = 'rotate(' + deg + 'deg)';
   }
   function showPrize() {
-    if (!L.passedMock(state)) { toast('모의고사에서 합격 점수를 받으면 선물 룰렛을 돌릴 수 있어요.'); return; }
+    if (!L.passedMock(state)) { toast('실전 시험에서 합격 점수를 받으면 선물 룰렛을 돌릴 수 있어요.'); return; }
     buildWheel();
     spinning = false;
     $('prizeSlot').innerHTML = '';
@@ -1047,11 +1159,11 @@
   $('hongGift').addEventListener('click', showPrize);
 
   // ---------- 홍패 ----------
-  // 홍패에는 가장 잘 본 모의고사 점수를 쓴다
+  // 홍패에는 가장 잘 본 실전 시험 점수를 쓴다
   function showHong(fresh) {
     var e = L.bestMock(state);
     if (!e || !L.passedMock(state)) return;
-    $('hongTitle').textContent = '한자 7급 모의고사 ' + (L.examTitle(e.score, e.total) || '합격');
+    $('hongTitle').textContent = '한자 7급 실전 시험 ' + (L.examTitle(e.score, e.total) || '합격');
     $('hongName').textContent = state.name;
     $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답 (합격 ' + L.passMark(e.total) + '문제)';
     $('hongDate').textContent = longDate(e.d);

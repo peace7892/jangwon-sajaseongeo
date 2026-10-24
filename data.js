@@ -602,12 +602,15 @@
     { w: '全心全力', r: '전심전력', m: '온 마음과 온 힘' }
   ];
 
-  // 21일 계획(공부한 날 수 기준): 1일째 진단, 2~10일째 새 한자, 11~15일째 독음·유형, 16~20일째 모의고사, 21일째 가볍게
+  // 21일 계획(공부한 날 수 기준): 1일째 진단, 2~10일째 새 한자, 11~16일째 독음·유형, 17~21일째 실전 시험
   var PLAN = ['diag', 'new', 'new', 'new', 'new', 'new', 'new', 'new', 'new', 'new',
-    'dok', 'dok', 'dok', 'dok', 'dok', 'mock', 'mock', 'mock', 'mock', 'mock', 'light'];
+    'dok', 'dok', 'dok', 'dok', 'dok', 'dok', 'mock', 'mock', 'mock', 'mock', 'mock'];
 
   // 시험 날 (홈 화면의 D-day)
   var EXAM_DATE = '2026-11-15';
+  // 이 날부터 시험 전날까지(5일)는 공부한 날 수와 상관없이 첫 번째 공부가 실전 시험(기출 형식, 시간 제한)
+  var MOCK_FROM = '2026-11-10';
+  var EXAM_MINUTES = 50;
 
   // 별 합계 기준 (150자 × 별 3 = 최대 450)
   var RANKS = [
@@ -628,7 +631,7 @@
   var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
   var DATA = { CHARS: CHARS, GROUPS: GROUPS, WORDS: WORDS, READING_EXCEPTIONS: READING_EXCEPTIONS, PAIRS: PAIRS, IDIOMS: IDIOMS,
-    PLAN: PLAN, EXAM_DATE: EXAM_DATE, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
+    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, EXAM_MINUTES: EXAM_MINUTES, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);
