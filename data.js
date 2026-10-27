@@ -603,14 +603,17 @@
     { w: '全心全力', r: '전심전력', m: '온 마음과 온 힘' }
   ];
 
-  // 21일 계획(공부한 날 수 기준): 1일째 진단, 2~10일째 새 한자, 11~16일째 독음·유형, 17~21일째 실전 시험
+  // 27일 계획(10/25~11/20, 공부한 날 수 기준): 1일째 진단, 2~10일째 새 한자, 11~16일째 독음·유형,
+  // 17~21일째 실전 시험과 보강 번갈아, 22~26일째 매일 실전 시험, 27일째(시험 전날) 가볍게
   var PLAN = ['diag', 'new', 'new', 'new', 'new', 'new', 'new', 'new', 'new', 'new',
-    'dok', 'dok', 'dok', 'dok', 'dok', 'dok', 'mock', 'mock', 'mock', 'mock', 'mock'];
+    'dok', 'dok', 'dok', 'dok', 'dok', 'dok', 'mock', 'dok', 'mock', 'dok', 'mock',
+    'mock', 'mock', 'mock', 'mock', 'mock', 'light'];
 
-  // 시험 날 (홈 화면의 D-day)
-  var EXAM_DATE = '2026-11-15';
-  // 이 날부터 시험 전날까지(5일)는 공부한 날 수와 상관없이 첫 번째 공부가 실전 시험(기출 형식, 시간 제한)
+  // 시험 날 (홈 화면의 D-day). 처음엔 11/15로 알았다가 11/21로 바뀌었다
+  var EXAM_DATE = '2026-11-21';
+  // 이 날부터는 공부한 날 수와 상관없이 날짜로 정한다: 실전 시험 날(기출 형식, 시간 제한), 그 사이는 보강, 시험 전날은 가볍게
   var MOCK_FROM = '2026-11-10';
+  var MOCK_DAYS = ['2026-11-10', '2026-11-12', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19'];
   var EXAM_MINUTES = 50;
 
   // 필순 문제에 쓰는 글자: 우리(어문회)와 중국 필순이 같은 글자만 (획 모양은 strokes.js). 右는 우리 순서로 바꿔 넣었다
@@ -635,7 +638,7 @@
   var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
   var DATA = { CHARS: CHARS, GROUPS: GROUPS, WORDS: WORDS, READING_EXCEPTIONS: READING_EXCEPTIONS, PAIRS: PAIRS, IDIOMS: IDIOMS,
-    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, EXAM_MINUTES: EXAM_MINUTES, STROKE_ORDER: STROKE_ORDER, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
+    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, MOCK_DAYS: MOCK_DAYS, EXAM_MINUTES: EXAM_MINUTES, STROKE_ORDER: STROKE_ORDER, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);

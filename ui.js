@@ -4,7 +4,7 @@
   var D = window.DATA, L = window.Logic, Q = window.Quiz;
   var KEY = 'jangwon-hanja-v1';
   var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '10.24-3';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '10.28-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -447,9 +447,14 @@
       $('startSub').textContent = '기출 형식 ' + total + '문제 · ' + D.EXAM_MINUTES + '분 · ' + L.passMark(total) + '문제 이상 맞히면 합격!';
       return;
     }
+    if (Q.dayType(state, t, D) === 'light') {
+      $('startMain').textContent = '시험 전날, 가볍게 공부';
+      $('startSub').textContent = '약한 한자와 필순 ' + total + '문제 · 끝나면 푹 쉬어요!';
+      return;
+    }
     var reviews = preview.steps.filter(function (s) { return isQ(s) && s.q.mode === 'review'; }).length;
     var cards = preview.steps.filter(isCard).length;
-    var parts = [day + '일째'];
+    var parts = [day + '일째' + (t >= D.MOCK_FROM ? ' 보강' : '')];
     if (reviews) parts.push('복습 ' + reviews + '문제');
     if (cards) parts.push('새 한자 ' + cards + '자');
     if (total - reviews - cards * 3 > 0 && !cards) parts.push((Q.dayType(state, t, D) === 'dok' ? '한자어 읽기·유형 ' : '연습 ') + (total - reviews) + '문제');
@@ -457,7 +462,7 @@
     $('startSub').textContent = parts.join(' · ');
   }
 
-  // 스티커판: 21일 × 2칸(한 줄에 일주일), 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날 아래 칸은 🎁 선물
+  // 스티커판: 27일 × 2칸(한 줄에 일주일), 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날 아래 칸은 🎁 선물
   var ROT = [-8, 6, -4, 9, -6, 5, -9];
   var justStuckKey = '';
   function renderBoard(t) {
@@ -475,7 +480,7 @@
     board.appendChild(cells);
     justStuckKey = '';
   }
-  var DAY_TAG = { diag: '진단', mock: '실전' };
+  var DAY_TAG = { diag: '진단', mock: '실전', light: '전날' };
   function cellFor(d, kind, isToday) {
     var sticker = state.stickers.filter(function (s) { return (s.k === 'review') === (kind === 'review') && s.day === d; })[0];
     var type = Q.planType(d, D), tag = kind === 'main' && DAY_TAG[type];
@@ -1064,10 +1069,13 @@
 
   // ---------- 스티커 ----------
   var chosenSticker = null;
+  // 내일 할 공부 미리 알려 주기 (11/10부터는 날짜로 정해진다)
   function nextDayHint(day) {
-    var next = Q.planType(day + 1, D);
-    if (day >= L.LAST_DAY) return '';
-    if (L.addDays(today(), 1) === D.MOCK_FROM) return ' 내일부터는 ' + D.EXAM_MINUTES + '분 실전 시험이에요!';
+    var tomorrow = L.addDays(today(), 1), next = Q.dayType(state, tomorrow, D);
+    if (day >= L.LAST_DAY || tomorrow >= D.EXAM_DATE) return '';
+    if (next === 'mock') return ' 내일은 ' + D.EXAM_MINUTES + '분 실전 시험이에요!';
+    if (next === 'light') return ' 내일은 시험 전날, 가볍게만 해요.';
+    if (next === 'dok' && tomorrow >= D.MOCK_FROM) return ' 내일은 틀린 한자를 보강하는 날이에요.';
     if (next === 'dok' && Q.planType(day, D) === 'new') return ' 150자를 다 배웠어요! 다음 날부터는 한자어 읽기 집중이에요.';
     return '';
   }

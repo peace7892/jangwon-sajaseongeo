@@ -6,7 +6,7 @@
   var REVIEW_GAP = [1, 2, 3, 4];
   var REVIEW_CAP = 20;
   var CHAR_COUNT = 150;
-  var LAST_DAY = 21;            // 21일째 = 시험 전날, 가볍게
+  var LAST_DAY = 27;            // 27일째(11/20) = 시험 전날, 가볍게
   var PASS_RATE = 49 / 70;      // 어문회 7급 합격 기준 70문항 중 49문항
   var TYPES = { 'hun-pick': 1, 'hun-write': 1, 'dok-write': 1, opp: 1, idiom: 1, mean: 1, stroke: 1 };
   var MODES = { review: 1, learn: 1, practice: 1, exam: 1, diag: 1 };

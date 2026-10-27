@@ -11,6 +11,7 @@
   var REVIEW_SESSION_SIZE = 15; // 두 번째 공부 문제 수
   var REVIEW_SESSION_MAX = 20;
   var TASTE = 5;                // 진단 날 아는 글자가 적으면 미리 맛보는 새 글자 수
+  var LIGHT_SIZE = 15;          // 시험 전날 약한 글자 수
   // 실제 시험 70문항 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2 · 필순 2
   var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2, stroke: 2 };
   var ORDINALS = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
@@ -143,11 +144,15 @@
 
   // ---------- 하루 공부 ----------
   function planType(day, data) { return data.PLAN[Math.max(0, Math.min(data.PLAN.length, day) - 1)]; }
-  // 오늘 할 공부: 시험 전 5일(MOCK_FROM부터)은 날짜로 실전 시험, 그 전에는 공부한 날 수로 계획을 따른다
+  // 오늘 할 공부: MOCK_FROM부터는 날짜로(실전 시험 날 · 그 사이 보강 · 시험 전날 가볍게),
+  // 그 전에는 공부한 날 수로 계획을 따르되 실전·가볍게는 아직 하지 않고 유형 공부를 한다
   function dayType(state, today, data) {
-    if (today >= data.MOCK_FROM) return 'mock';
+    if (today >= data.MOCK_FROM) {
+      if (data.MOCK_DAYS.indexOf(today) >= 0) return 'mock';
+      return today >= L.addDays(data.EXAM_DATE, -1) ? 'light' : 'dok';
+    }
     var type = planType(L.studyDay(state, today), data);
-    return type === 'mock' ? 'dok' : type;
+    return type === 'mock' || type === 'light' ? 'dok' : type;
   }
   // 오늘 새로 배울 글자 수: 모르는 글자를 남은 새 한자 날에 나눠서(최소 5자). 새 한자 날이 지나면 빠진 글자를 따라잡는다
   function newPerDay(state, day, data) {
@@ -200,6 +205,13 @@
     if (type === 'mock') return { kind: 'mock', day: day, minutes: data.EXAM_MINUTES, steps: buildMock(state, data, rng) };
 
     var steps = [], used = {};
+    if (type === 'light') {
+      weakestFirst(L.learnedIds(state), state, rng).slice(0, LIGHT_SIZE).forEach(function (id) {
+        steps.push(step(reviewQuestion(state, id, data, rng, 'review')));
+      });
+      strokeQuestions(2, data, rng, 'practice').forEach(function (q) { steps.push(step(q)); });
+      return { kind: 'daily', day: day, steps: steps };
+    }
     L.dueIds(state, today, type === 'new' ? DAY_REVIEW_CAP : L.REVIEW_CAP).forEach(function (id) {
       used[id] = true;
       steps.push(step(reviewQuestion(state, id, data, rng, 'review')));
