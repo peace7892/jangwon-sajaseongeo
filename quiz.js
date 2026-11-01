@@ -64,8 +64,10 @@
     return q;
   }
   function makeHunWrite(c, mode) {
+    var many = c.answers.length > 1
+      ? '\n(' + c.answers.map(function (a) { return '“' + a + '”'; }).join(', ') + ' 중 하나만 써도 되고, 함께 써도 돼요)' : '';
     return { id: c.id, type: 'hun-write', mode: mode, ask: '훈과 음을 쓰세요', show: c.h, big: true,
-      help: mode === 'learn' ? '예: 水 → 물 수' : '', answers: c.answers.slice(), answer: c.hun, explain: charExplain(c) };
+      help: mode === 'learn' ? '예: 水 → 물 수' : '', answers: c.answers.slice(), answer: c.hun, explain: charExplain(c) + many };
   }
   function makeDokWrite(w, id, data, mode) {
     var parts = w.c.map(function (cid) { return hunOf(data, cid); }).join(' · ');

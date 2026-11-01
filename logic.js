@@ -34,8 +34,60 @@
     var n = normalize(input);
     return n.length > 0 && (answers || []).some(function (a) { return normalize(a) === n; });
   }
+  // 훈음 쓰기: 공식 훈음이 여럿이면(밥/먹을 식, 쇠 금 · 성 김, 오를/오른(쪽) 우) 하나만 써도, 함께 써도 정답.
+  // 띄어쓰기·쉼표·빗금·가운뎃점·괄호는 무시하고, 쓴 순서도 따지지 않는다. 훈과 음을 엇갈려 쓰면(쇠 김) 틀린다
+  var HUN_SEPARATORS = /[\s,\/·・、.()]+/g;
+  function orderings(items) {   // 하나 이상 고른 모든 순서
+    var out = [];
+    (function grow(prefix, rest) {
+      rest.forEach(function (x, i) {
+        var next = prefix.concat([x]);
+        out.push(next);
+        grow(next, rest.slice(0, i).concat(rest.slice(i + 1)));
+      });
+    })([], items);
+    return out;
+  }
+  function hunForms(answers) {
+    var byEum = {}, eums = [], forms = Object.create(null);
+    answers.forEach(function (a) {
+      var s = a.normalize('NFC'), sp = s.lastIndexOf(' '), hun = s.slice(0, sp), eum = s.slice(sp + 1);
+      if (!byEum[eum]) { byEum[eum] = []; eums.push(eum); }
+      byEum[eum].push(hun);
+    });
+    // 음 하나마다: 그 음의 훈을 하나 이상 + 음 (밥먹을식), 또는 훈마다 음을 붙여서 (밥식먹을식)
+    var perReading = eums.map(function (e) {
+      var ways = [];
+      orderings(byEum[e]).forEach(function (hs) {
+        ways.push(hs.join('') + e);
+        if (hs.length > 1) ways.push(hs.map(function (h) { return h + e; }).join(''));
+      });
+      return ways;
+    });
+    // 음이 여럿이면 함께 써도 된다 (쇠금성김)
+    orderings(eums.map(function (_, i) { return i; })).forEach(function (idx) {
+      var acc = [''];
+      idx.forEach(function (i) {
+        var next = [];
+        acc.forEach(function (p) { perReading[i].forEach(function (f) { next.push(p + f); }); });
+        acc = next;
+      });
+      acc.forEach(function (f) { forms[f.replace(HUN_SEPARATORS, '')] = true; });
+    });
+    // 훈이 같은 음들은 훈 한 번에 음을 이어 써도 된다 (수레 거/차)
+    var shared = {};
+    eums.forEach(function (e) { byEum[e].forEach(function (h) { (shared[h] = shared[h] || []).push(e); }); });
+    Object.keys(shared).forEach(function (h) {
+      if (shared[h].length > 1) orderings(shared[h]).forEach(function (es) { forms[(h + es.join('')).replace(HUN_SEPARATORS, '')] = true; });
+    });
+    return forms;
+  }
+  function matchesHun(input, answers) {
+    var n = String(input == null ? '' : input).normalize('NFC').replace(HUN_SEPARATORS, '');
+    return n.length > 0 && hunForms(answers || [])[n] === true;
+  }
   function checkChoice(q, id) { return id === q.key; }
-  function checkWrite(q, input) { return matchesAny(input, q.answers); }
+  function checkWrite(q, input) { return q.type === 'hun-write' ? matchesHun(input, q.answers) : matchesAny(input, q.answers); }
 
   // ---------- 별과 복습 ----------
   function clone(o) { return JSON.parse(JSON.stringify(o)); }

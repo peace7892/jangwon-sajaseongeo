@@ -4,7 +4,7 @@
   var D = window.DATA, L = window.Logic, Q = window.Quiz;
   var KEY = 'jangwon-hanja-v1';
   var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '10.28-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '11.01-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
