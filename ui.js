@@ -1,10 +1,10 @@
 /* 장원급제 한자 7급: 화면 그리기, 소리, 입력, 저장 */
 (function () {
   'use strict';
-  var D = window.DATA, L = window.Logic, Q = window.Quiz;
+  var D = window.DATA, L = window.Logic, Q = window.Quiz, N = window.Notify;
   var KEY = 'jangwon-hanja-v1';
   var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '11.01-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var APP_VERSION = '11.12-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -296,6 +296,7 @@
   });
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) return;
+    flushOutbox();
     if (syncFromStorage()) {
       if (S) toast('다른 창에서 한 공부를 불러왔어요.');
       goHome();
@@ -311,6 +312,46 @@
   window.addEventListener('pageshow', function (e) {
     if (e.persisted && syncFromStorage()) goHome();
   });
+  // ---------- 부모님 휴대폰 알림 (ntfy) ----------
+  // 알림은 보관함에 먼저 넣고 차례로 보낸다. 인터넷이 끊겨 있으면 남겨 두었다가 앱을 다시 열거나 연결되면 보낸다
+  var OUTBOX_KEY = KEY + '-outbox', sending = false;
+  function readOutbox() { try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)) || []; } catch (e) { return []; } }
+  function writeOutbox(box) { try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(box)); } catch (e) { /* 저장이 막히면 이번 알림만 놓친다 */ } }
+  function postNtfy(body) {
+    return fetch(N.NTFY_URL, { method: 'POST', body: JSON.stringify(body) }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+    });
+  }
+  function flushOutbox() {
+    if (sending || !state.notify || !window.fetch) return;
+    var item = readOutbox()[0];
+    if (!item) return;
+    sending = true;
+    postNtfy(N.payload(state.notify, item, Date.now())).then(function () {
+      writeOutbox(N.remove(readOutbox(), item.id));
+      sending = false;
+      flushOutbox();
+    }, function () { sending = false; });
+  }
+  function notify(msg) {
+    if (!state.notify) return;
+    writeOutbox(N.enqueue(readOutbox(), msg, Date.now()));
+    flushOutbox();
+  }
+  // 첫 번째·두 번째 공부, 진단, 실전 시험을 마치면: 누가, 무엇을, 몇 개 맞혔고, 몇 분 걸렸는지
+  function notifyFinish(sess, timedOut) {
+    if (!sess) return;
+    var total = sess.steps.filter(isQ).length, now = Date.now();
+    var solved = sess.steps.slice(0, sess.i).filter(isQ).length;
+    notify(N.finishMessage({
+      name: state.name, kind: sess.kind, day: sess.day, right: sess.right, total: total,
+      minutes: sess.started ? (Math.min(now, sess.ends || now) - sess.started) / 60000 : null,
+      passed: sess.right >= L.passMark(total), timedOut: !!timedOut, unanswered: total - solved,
+      skipped: (sess.miss || []).filter(function (m) { return m.a === ''; }).length
+    }));
+  }
+  window.addEventListener('online', flushOutbox);
+
   function toast(msg) {
     var old = document.querySelector('.toast');
     if (old) old.remove();
@@ -619,7 +660,9 @@
     clearTimeout(autoNext);
     if (answered) S.i++;      // 방금 답한 문제는 푼 문제로 센다
     S.timedOut = true;
+    var sess = state.session;
     setState(L.closeExpiredMock(state, Date.now()));
+    notifyFinish(sess, true);
     toast('시간이 끝났어요! 채점할게요.');
     finish();
   }
@@ -630,6 +673,7 @@
     S = { kind: 'mock', steps: s.steps, i: s.i, right: s.right, total: s.steps.filter(isQ).length, qn: 0, combo: 0,
       newCards: 0, starsBefore: s.starsBefore, persist: true, ends: s.ends, miss: (s.miss || []).slice(), warned: {}, timedOut: true };
     setState(L.closeExpiredMock(state, now));
+    notifyFinish(s, true);
     finish();
     return true;
   }
@@ -643,10 +687,11 @@
     if (S.ends && !correct) S.miss.push({ i: S.i, a: String(given == null ? '' : given) });
     setState(L.advanceSession(state, correct, given));
     if (S.i + 1 < S.steps.length) return;
-    var t = today();
-    if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, state.session.d)));
+    var t = today(), sess = state.session;
+    if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, sess.d)));
     else if (S.kind === 'review') setState(L.endSession(L.finishReview(state, t)));
     else setState(L.endSession(L.finishDaily(state, t)));
+    notifyFinish(sess, false);
   }
   function runStep() {
     if (S.i >= S.steps.length) { finish(); return; }
@@ -1295,6 +1340,8 @@
     $('pRestoreConfirm').hidden = true;
     pendingRestore = null;
     ['pNameMsg', 'pSoundMsg', 'pStickerMsg', 'pCopyMsg', 'pRestoreMsg', 'pResetMsg'].forEach(function (id) { msg(id, ''); });
+    $('pNotify').value = state.notify;
+    renderNotifyStatus();
     $('pToday').checked = false;
     renderStickerRestore();
     show('parent');
@@ -1342,6 +1389,7 @@
     setState(next);
     $('pCode').value = L.encodeBackup(state);
     var done = day + '일째 ' + (kind === 'main' ? '위' : '아래') + ' 칸에 ' + restoreEmoji + ' 스티커를 붙였어요.';
+    notify(N.parentMessage(state.name, 'sticker', day + '일째 ' + (kind === 'main' ? '위 칸(첫 번째 공부)' : '아래 칸(두 번째 공부)')));
     renderStickerRestore();
     msg('pStickerMsg', done, 'ok');
   });
@@ -1387,8 +1435,10 @@
   });
   $('pRestoreYes').addEventListener('click', function () {
     if (!pendingRestore) return;
+    if (!pendingRestore.notify) pendingRestore.notify = state.notify;   // 예전 백업이어도 알림은 계속 간다
     setState(pendingRestore);
     pendingRestore = null;
+    notify(N.parentMessage(state.name, 'restore', '스티커 ' + state.stickers.length + '장 · 한자 ' + Object.keys(state.cards).length + '자'));
     goHome();
     toast('기록을 되살렸어요.');
   });
@@ -1401,13 +1451,42 @@
       msg('pResetMsg', '“지우기”라고 써야 기록이 지워져요.', 'bad');
       return;
     }
+    notify(N.parentMessage(state.name, 'reset'));
     var fresh = L.emptyState();
     fresh.sound = state.sound;
+    fresh.notify = state.notify;
     setState(fresh);
     $('nameInput').value = '';
     goHome();
   });
 
+  // 알림 코드: 부모님 휴대폰의 ntfy 앱에서 구독한 것과 같은 코드를 아이패드마다 넣는다
+  function renderNotifyStatus() {
+    var left = readOutbox().length;
+    msg('pNotifyMsg', !state.notify ? '아직 알림 코드가 없어서 알림이 가지 않아요.'
+      : left ? '알림이 켜져 있어요. 아직 보내지 못한 알림 ' + left + '개는 인터넷이 연결되면 보내요.' : '알림이 켜져 있어요.', state.notify ? 'ok' : '');
+  }
+  $('pNotifyBtn').addEventListener('click', function () {
+    var v = $('pNotify').value.trim();
+    if (v && !N.validTopic(v)) { msg('pNotifyMsg', '알림 코드는 영어·숫자·-·_ 12자 이상이에요. 받은 코드를 그대로 붙여 넣어 주세요.', 'bad'); return; }
+    setState(withChanges({ notify: v }));
+    $('pCode').value = L.encodeBackup(state);
+    if (v) { msg('pNotifyMsg', '저장했어요. “시험 알림 보내기”로 휴대폰에 알림이 오는지 확인해 주세요.', 'ok'); flushOutbox(); }
+    else msg('pNotifyMsg', '알림을 껐어요.');
+  });
+  $('pNotifyTest').addEventListener('click', function () {
+    if (!state.notify) { msg('pNotifyMsg', '먼저 알림 코드를 저장해 주세요.', 'bad'); return; }
+    msg('pNotifyMsg', '보내는 중이에요');
+    var m = N.parentMessage(state.name, 'test');
+    postNtfy({ topic: state.notify, title: m.title, message: m.message }).then(function () {
+      msg('pNotifyMsg', '보냈어요. 휴대폰에 알림이 왔는지 확인해 주세요.', 'ok');
+      flushOutbox();
+    }, function () {
+      msg('pNotifyMsg', '보내지 못했어요. 인터넷 연결을 확인하고 다시 눌러 주세요.', 'bad');
+    });
+  });
+
   $('appVersion').textContent = '버전 ' + APP_VERSION;
   goHome();
+  flushOutbox();
 })();

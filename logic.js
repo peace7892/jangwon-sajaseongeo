@@ -161,6 +161,7 @@
       newCards: built.steps.filter(function (s) { return s.t === 'card'; }).length,
       starsBefore: totalStars(state)
     };
+    if (now != null) next.session.started = now;   // 걸린 시간을 부모님 알림에 쓴다
     if (built.minutes) {
       next.session.ends = now + built.minutes * 60000;
       next.session.miss = [];
@@ -297,7 +298,7 @@
 
   // ---------- 기록 ----------
   function emptyState() {
-    return { v: 1, name: '', cards: {}, stickers: [], mocks: [], prize: null, sound: true, session: null };
+    return { v: 1, name: '', cards: {}, stickers: [], mocks: [], prize: null, sound: true, session: null, notify: '' };
   }
   function isNum(x, lo, hi) { return typeof x === 'number' && x >= lo && x <= hi; }
   function validId(id) { return isNum(id, 1, CHAR_COUNT) && id % 1 === 0; }
@@ -321,6 +322,7 @@
       d: x.d, kind: x.kind, day: Number(x.day) || 1, steps: x.steps, i: i, right: right,
       newCards: Number(x.newCards) || 0, starsBefore: Number(x.starsBefore) || 0
     };
+    if (typeof x.started === 'number' && isFinite(x.started)) out.started = x.started;
     if (typeof x.ends === 'number' && isFinite(x.ends)) {
       out.ends = x.ends;
       out.miss = (Array.isArray(x.miss) ? x.miss : []).filter(function (m) {
@@ -369,6 +371,8 @@
       s.prize = { i: p.i, item: p.item.slice(0, 30), d: p.d };
     }
     if (typeof obj.sound === 'boolean') s.sound = obj.sound;
+    // 부모님 알림 코드(ntfy 토픽)
+    if (typeof obj.notify === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(obj.notify)) s.notify = obj.notify;
     s.session = sanitizeSession(obj.session);
     return s;
   }

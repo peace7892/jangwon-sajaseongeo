@@ -511,6 +511,16 @@ p { margin: 0; }
       <button class="quiet-btn" type="button" data-go="home">홈으로</button>
     </div>
     <div class="panel">
+      <h2>부모님 휴대폰 알림</h2>
+      <p class="help">부모님 휴대폰에 무료 앱 <b>ntfy</b>를 설치하고, 앱에서 <b>+</b>를 눌러 받은 알림 코드를 구독해 주세요. 같은 코드를 이 칸에 넣으면, 이 아이패드에서 공부를 마칠 때마다 맞힌 수와 걸린 시간이 알림으로 가요. 두 아이패드에 같은 코드를 넣으면 한 곳에서 두 아이 알림을 다 받아요.</p>
+      <div class="field-row">
+        <input id="pNotify" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="알림 코드" placeholder="알림 코드">
+        <button class="plain-btn" id="pNotifyBtn" type="button">저장</button>
+      </div>
+      <button class="plain-btn" id="pNotifyTest" type="button" style="justify-self:start">시험 알림 보내기</button>
+      <p class="msg" id="pNotifyMsg" aria-live="polite"></p>
+    </div>
+    <div class="panel">
       <h2>이름 바꾸기</h2>
       <div class="field-row">
         <input id="pName" type="text" maxlength="8" lang="ko" autocomplete="off" aria-label="이름">
@@ -571,6 +581,7 @@ p { margin: 0; }
 <script src="logic.js"></script>
 <script src="quiz.js"></script>
 <script src="strokes.js"></script>
+<script src="notify.js"></script>
 <script src="sound.js"></script>
 <script src="ui.js"></script>
 </body></html>
