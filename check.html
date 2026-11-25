@@ -87,7 +87,8 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
 <script>
 (function () {
   'use strict';
-  var KEY = 'jangwon-hanja-v1';
+  var KEY = 'jangwon-hanja6-v1';
+  var SEVEN_KEY = 'jangwon-hanja-v1';   // 7급 때 기록(6급이 처음 열릴 때 가져온다)
   var results = {};   // 이름 → 값 (복사용)
   function $(id) { return document.getElementById(id); }
   function row(box, label, value, good) {
@@ -172,6 +173,7 @@ textarea { width: 100%; min-height: 160px; font: 0.8rem ui-monospace, Menlo, mon
         row('app', '기록 크기', Math.round(raw.length / 1024 * 10) / 10 + 'KB');
       }
     }
+    row('app', '7급 기록', localStorage.getItem(SEVEN_KEY) ? '있음' : '없음');
     row('app', '망가진 기록 보관본', localStorage.getItem(KEY + '-broken') ? '있음' : '없음');
     row('app', '탭 복사본', sessionStorage.getItem(KEY + '-tab') ? '있음' : '없음');
   } catch (e) { row('app', '앱 기록', '읽기 막힘 · ' + err(e), false); }

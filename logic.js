@@ -1,16 +1,22 @@
-/* 장원급제 한자 7급: 화면과 상관없는 계산 — 기록·별·세션·스티커·모의고사·백업 (브라우저: window.Logic, Node: module.exports) */
+/* 장원급제 한자 6급: 화면과 상관없는 계산 — 기록·별·간격·세션·스티커·실전 시험·백업 (브라우저: window.Logic, Node: module.exports) */
 (function (root) {
   'use strict';
 
-  // 지금 별 개수에 따라, 맞혔을 때 다음 복습까지의 날 수 (다음 날 → 이틀 뒤 → 사흘 뒤 → 나흘마다)
-  var REVIEW_GAP = [1, 2, 3, 4];
+  // 맞혔을 때 다음 복습까지의 날 수: 별 0→1은 1일, 1→2는 3일, 2→3은 7일, 3에서는 14일마다.
+  // 한 번이라도 틀린 적 있는 글자(miss ≥ 1)는 간격을 반으로(올림, 최소 1일) — 틀린 글자가 더 자주 나온다
+  var REVIEW_GAP = [1, 3, 7, 14];
   var REVIEW_CAP = 20;
-  var CHAR_COUNT = 150;
-  var LAST_DAY = 27;            // 27일째(11/20) = 시험 전날, 가볍게
-  var PASS_RATE = 49 / 70;      // 어문회 7급 합격 기준 70문항 중 49문항
-  var TYPES = { 'hun-pick': 1, 'hun-write': 1, 'dok-write': 1, opp: 1, idiom: 1, mean: 1, stroke: 1 };
-  var MODES = { review: 1, learn: 1, practice: 1, exam: 1, diag: 1 };
-  var KINDS = ['diag', 'daily', 'review', 'mock'];
+  var CHAR_COUNT = 300;
+  var WRITE_COUNT = 150;        // 쓰기 범위: 7급까지 150자(id 1~150)
+  var LAST_DAY = 80;            // 일요일을 뺀 공부일 (11/26에 시작하면 2/26까지 80일)
+  var PASS_RATE = 0.7;          // 어문회 2급~8급 합격 기준 70% (6급 90문항 중 63, 7급 70문항 중 49)
+  var TYPES = { 'hun-pick': 1, 'hun-write': 1, 'dok-write': 1, opp: 1, idiom: 1, mean: 1, stroke: 1, syn: 1, hom: 1,
+    'write-trace': 1, 'write-hun': 1, 'write-word': 1 };
+  var MODES = { review: 1, learn: 1, practice: 1, exam: 1, diag: 1, retry: 1 };
+  var KINDS = ['diag', 'daily', 'review', 'mock', 'write'];
+  var TOPIC_RE = /^[A-Za-z0-9_-]{12,64}$/;
+  // 7급 기록을 가져올 때 별에 따라 첫 복습을 며칠 뒤로 나눌지 (한꺼번에 몰리지 않게)
+  var CARRY = { 3: [7, 27], 2: [3, 13], 1: [1, 6], 0: [1, 2] };
   var BACKUP_PREFIX = 'JW1.';
   var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -90,26 +96,44 @@
   function checkWrite(q, input) { return q.type === 'hun-write' ? matchesHun(input, q.answers) : matchesAny(input, q.answers); }
 
   // ---------- 별과 복습 ----------
+  // 읽기 기록은 state.cards(300자), 쓰기 기록은 state.writes(150자). 문제의 track이 'write'면 쓰기 기록을 바꾼다
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
-  function learnedIds(state) { return Object.keys(state.cards).map(Number); }
+  function mapName(which) { return which === 'write' ? 'writes' : 'cards'; }
+  function learnedIds(state, which) { return Object.keys(state[mapName(which)] || {}).map(Number); }
   function newCardState(today) { return { s: 0, due: addDays(today, 1), at: today }; }
+  function gapFor(s, miss) { var g = REVIEW_GAP[s]; return miss > 0 ? Math.max(1, Math.ceil(g / 2)) : g; }
+  // 맞히면 별 +1, 간격만큼 뒤로. 틀리면 별 −1, 다음 날 두 문제(two), 7일 뒤 다시 확인(wk)
   function applyReview(cs, correct, today) {
-    if (correct) return { s: Math.min(3, cs.s + 1), due: addDays(today, REVIEW_GAP[cs.s]), at: cs.at };
-    return { s: Math.max(0, cs.s - 1), due: addDays(today, 1), at: cs.at };
+    var miss = cs.miss || 0, out;
+    if (correct) {
+      out = { s: Math.min(3, cs.s + 1), due: addDays(today, gapFor(cs.s, miss)), at: cs.at, miss: miss };
+      if (cs.wk && cs.wk > today) out.wk = cs.wk;     // 다음 주 확인 날이 아직이면 남긴다
+    } else {
+      out = { s: Math.max(0, cs.s - 1), due: addDays(today, 1), at: cs.at, miss: miss + 1, wk: addDays(today, 7), two: true };
+    }
+    if (cs.k) out.k = 1;
+    return out;
   }
-  function dueIds(state, today, cap) {
+  function dueAt(c) { return c.wk && c.wk < c.due ? c.wk : c.due; }
+  // 복습 순서: ① 어제 틀린 글자(two) ② 다음 주 확인 날이 된 글자(wk) ③ 나머지는 오래 밀린 것·별이 적은 것부터.
+  // 하루쯤 빠뜨려 복습이 쌓여도 틀린 글자 확인은 밀리지 않는다
+  function dueIds(state, today, cap, which) {
     cap = cap == null ? REVIEW_CAP : cap;
-    return learnedIds(state)
-      .filter(function (id) { return state.cards[id].due <= today; })
+    var map = state[mapName(which)] || {};
+    function rank(c) { return c.two && c.due <= today ? 0 : c.wk && c.wk <= today ? 1 : 2; }
+    return Object.keys(map).map(Number)
+      .filter(function (id) { return dueAt(map[id]) <= today; })
       .sort(function (a, b) {
-        var A = state.cards[a], B = state.cards[b];
-        if (A.due !== B.due) return A.due < B.due ? -1 : 1;
+        var A = map[a], B = map[b];
+        if (rank(A) !== rank(B)) return rank(A) - rank(B);
+        if (dueAt(A) !== dueAt(B)) return dueAt(A) < dueAt(B) ? -1 : 1;
         return (A.s - B.s) || (a - b);
       })
       .slice(0, cap);
   }
   function totalStars(state) {
-    return learnedIds(state).reduce(function (sum, id) { return sum + state.cards[id].s; }, 0);
+    function sum(map) { return Object.keys(map || {}).reduce(function (t, id) { return t + map[id].s; }, 0); }
+    return sum(state.cards) + sum(state.writes);
   }
   function rankOf(stars, ranks) {
     var index = 0;
@@ -127,29 +151,68 @@
     return next;
   }
   function recordAnswer(state, q, correct, today) {
-    var cs = state.cards[q.id];
-    if (q.mode === 'diag') return correct && !cs ? markKnown(state, [q.id], today) : state;
-    if (!cs) return state;
-    var next;
-    // 새 글자를 배운 날 훈음 쓰기로 맞히면 첫 별
-    if (q.mode === 'learn') {
-      if (!correct || q.type !== 'hun-write' || cs.s > 0) return state;
+    var map = q.track === 'write' ? 'writes' : 'cards', cs = (state[map] || {})[q.id], next;
+    // 진단: 모르던 글자를 맞히면 아는 글자로. 이미 배운 글자(7급)를 틀리면 별을 내리고 다음 날·다음 주에 다시
+    if (q.mode === 'diag') {
+      if (!cs) return correct && map === 'cards' ? markKnown(state, [q.id], today) : state;
+      if (correct) return state;
       next = clone(state);
-      next.cards[q.id].s = 1;
+      next[map][q.id] = applyReview(cs, false, today);
       return next;
     }
-    // 모의고사에서 틀린 글자는 별 하나 내리고 오늘 두 번째 공부에서 다시
+    if (!cs) return state;
+    // 새 글자를 배운 날: 훈음 쓰기(읽기)나 보고 쓰기(쓰기)를 맞히면 첫 별
+    if (q.mode === 'learn') {
+      if (!correct || cs.s > 0 || q.type !== (map === 'writes' ? 'write-hun' : 'hun-write')) return state;
+      next = clone(state);
+      next[map][q.id].s = 1;
+      return next;
+    }
+    // 실전 시험에서 틀린 글자는 별 하나 내리고 오늘 두 번째 공부와 다음 주에 다시
     if (q.mode === 'exam') {
       if (correct) return state;
       next = clone(state);
-      next.cards[q.id].s = Math.max(0, cs.s - 1);
-      next.cards[q.id].due = today;
+      next[map][q.id] = applyReview(cs, false, today);
+      next[map][q.id].due = today;
+      delete next[map][q.id].two;
       return next;
     }
-    if (q.mode !== 'review') return state;
+    if (q.mode !== 'review') return state;    // 연습·다시 풀기는 기록을 바꾸지 않는다
     next = clone(state);
-    next.cards[q.id] = Object.assign(applyReview(cs, correct, today), cs.k ? { k: 1 } : {});
+    next[map][q.id] = applyReview(cs, correct, today);
     return next;
+  }
+  // 쓰기를 처음 배울 때(따라 쓰기) 쓰기 기록을 만든다
+  function learnWrite(state, id, today) {
+    if ((state.writes || {})[id]) return state;
+    var next = clone(state);
+    next.writes = next.writes || {};
+    next.writes[id] = { s: 0, due: addDays(today, 1), at: today, miss: 0 };
+    return next;
+  }
+  // 일요일은 쉬는 날
+  function isRestDay(key) {
+    var p = key.split('-');
+    return new Date(+p[0], +p[1] - 1, +p[2]).getDay() === 0;
+  }
+  // 7급 기록에서 이름·소리·알림 코드·150자 읽기 별을 가져온다. 첫 복습은 별에 따라 며칠에 걸쳐 나눈다
+  function importFromSeven(old, today) {
+    var s = emptyState();
+    if (!old || typeof old !== 'object') return s;
+    if (typeof old.name === 'string') s.name = old.name.slice(0, 12);
+    if (typeof old.sound === 'boolean') s.sound = old.sound;
+    if (typeof old.notify === 'string' && TOPIC_RE.test(old.notify)) s.notify = old.notify;
+    var counts = { 0: 0, 1: 0, 2: 0, 3: 0 }, cards = old.cards && typeof old.cards === 'object' ? old.cards : {};
+    Object.keys(cards).map(Number).filter(function (id) { return id >= 1 && id <= WRITE_COUNT && id % 1 === 0; })
+      .sort(function (a, b) { return a - b; })
+      .forEach(function (id) {
+        var c = cards[id];
+        if (!c || [0, 1, 2, 3].indexOf(c.s) < 0) return;
+        var r = CARRY[c.s], n = counts[c.s]++;
+        s.cards[id] = { s: c.s, due: addDays(today, r[0] + n % (r[1] - r[0] + 1)), at: DATE_RE.test(c.at) ? c.at : today, miss: 0 };
+        if (c.k === 1) s.cards[id].k = 1;
+      });
+    return s;
   }
 
   // ---------- 이어서 하기 ----------
@@ -161,20 +224,33 @@
       newCards: built.steps.filter(function (s) { return s.t === 'card'; }).length,
       starsBefore: totalStars(state)
     };
+    next.session.miss = [];
     if (now != null) next.session.started = now;   // 걸린 시간을 부모님 알림에 쓴다
-    if (built.minutes) {
-      next.session.ends = now + built.minutes * 60000;
-      next.session.miss = [];
-    }
+    if (built.minutes) next.session.ends = now + built.minutes * 60000;
     return next;
   }
-  // 시간 제한이 있으면 틀리거나 넘긴 문제와 아이가 쓴 답을 남겨 결과에서 보여 준다
+  // 틀리거나 넘긴 문제와 아이가 쓴 답을 남긴다: 공부 끝에 다시 풀기, 실전 시험 결과의 틀린 문제 목록
   function advanceSession(state, correct, given) {
     if (!state.session) return state;
-    var next = clone(state);
-    if (next.session.miss && !correct) next.session.miss.push({ i: next.session.i, a: String(given == null ? '' : given) });
+    var next = clone(state), cur = next.session.steps[next.session.i];
+    var retry = cur && cur.t === 'q' && cur.q.mode === 'retry';   // 다시 풀기는 점수와 틀린 문제 목록에 넣지 않는다
+    if (!correct && !retry) (next.session.miss = next.session.miss || []).push({ i: next.session.i, a: String(given == null ? '' : given) });
     next.session.i += 1;
-    if (correct) next.session.right += 1;
+    if (correct && !retry) next.session.right += 1;
+    return next;
+  }
+  // 공부 끝에 그날 틀린 문제를 한 번 더(별·점수에는 들어가지 않는다). 실전 시험과 진단에는 없다
+  function addRetry(state) {
+    var s = state.session;
+    if (!s || s.retried || s.kind === 'mock' || s.kind === 'diag' || !s.miss || !s.miss.length) return state;
+    var next = clone(state), seen = {};
+    s.miss.forEach(function (m) {
+      var st = s.steps[m.i];
+      if (!st || st.t !== 'q' || st.q.mode === 'retry' || seen[m.i]) return;
+      seen[m.i] = true;
+      next.session.steps.push({ t: 'q', q: Object.assign({}, st.q, { mode: 'retry' }) });
+    });
+    next.session.retried = true;
     return next;
   }
   function timeLeft(state, now) {
@@ -298,7 +374,7 @@
 
   // ---------- 기록 ----------
   function emptyState() {
-    return { v: 1, name: '', cards: {}, stickers: [], mocks: [], prize: null, sound: true, session: null, notify: '' };
+    return { v: 1, name: '', cards: {}, writes: {}, stickers: [], mocks: [], prize: null, sound: true, session: null, notify: '' };
   }
   function isNum(x, lo, hi) { return typeof x === 'number' && x >= lo && x <= hi; }
   function validId(id) { return isNum(id, 1, CHAR_COUNT) && id % 1 === 0; }
@@ -309,6 +385,7 @@
     var q = st.t === 'q' && st.q;
     if (!q || !validId(q.id) || !TYPES[q.type] || !MODES[q.mode]) return false;
     if (typeof q.show !== 'string' || typeof q.answer !== 'string') return false;
+    if (/^write-/.test(q.type)) return true;          // 쓰기 문제는 화면에서 획으로 채점한다
     if (q.choices === undefined) return strs(q.answers);
     return Array.isArray(q.choices) && q.choices.length >= 2 && isNum(q.key, 1, 1000) &&
       q.choices.every(function (c) { return c && isNum(c.id, 1, 1000) && typeof c.text === 'string'; });
@@ -322,28 +399,35 @@
       d: x.d, kind: x.kind, day: Number(x.day) || 1, steps: x.steps, i: i, right: right,
       newCards: Number(x.newCards) || 0, starsBefore: Number(x.starsBefore) || 0
     };
+    out.miss = (Array.isArray(x.miss) ? x.miss : []).filter(function (m) {
+      return m && isNum(m.i, 0, x.steps.length - 1) && typeof m.a === 'string';
+    }).map(function (m) { return { i: m.i, a: m.a.slice(0, 40) }; });
     if (typeof x.started === 'number' && isFinite(x.started)) out.started = x.started;
-    if (typeof x.ends === 'number' && isFinite(x.ends)) {
-      out.ends = x.ends;
-      out.miss = (Array.isArray(x.miss) ? x.miss : []).filter(function (m) {
-        return m && isNum(m.i, 0, x.steps.length - 1) && typeof m.a === 'string';
-      }).map(function (m) { return { i: m.i, a: m.a.slice(0, 40) }; });
-    }
+    if (typeof x.ends === 'number' && isFinite(x.ends)) out.ends = x.ends;
+    if (x.retried === true) out.retried = true;
     return out;
   }
   function sanitize(obj) {
     if (!obj || typeof obj !== 'object' || obj.v !== 1) return null;
     var s = emptyState();
     if (typeof obj.name === 'string') s.name = obj.name.slice(0, 12);
-    if (obj.cards && typeof obj.cards === 'object') {
-      Object.keys(obj.cards).forEach(function (k) {
-        var id = Number(k), c = obj.cards[k];
-        if (validId(id) && c && [0, 1, 2, 3].indexOf(c.s) >= 0 && DATE_RE.test(c.due) && DATE_RE.test(c.at)) {
-          s.cards[id] = { s: c.s, due: c.due, at: c.at };
-          if (c.k === 1) s.cards[id].k = 1;
-        }
+    // 읽기 기록(300자)과 쓰기 기록(150자): 별, 다음 복습 날, 배운 날, 틀린 횟수, 다음 주 확인 날, 다음 날 두 문제
+    function cleanMap(src, max) {
+      var out = {};
+      if (!src || typeof src !== 'object') return out;
+      Object.keys(src).forEach(function (k) {
+        var id = Number(k), c = src[k];
+        if (!(isNum(id, 1, max) && id % 1 === 0) || !c || [0, 1, 2, 3].indexOf(c.s) < 0 || !DATE_RE.test(c.due) || !DATE_RE.test(c.at)) return;
+        var o = out[id] = { s: c.s, due: c.due, at: c.at };
+        if (c.k === 1) o.k = 1;
+        if (isNum(c.miss, 0, 999) && c.miss % 1 === 0) o.miss = c.miss;
+        if (DATE_RE.test(c.wk)) o.wk = c.wk;
+        if (c.two === true) o.two = true;
       });
+      return out;
     }
+    s.cards = cleanMap(obj.cards, CHAR_COUNT);
+    s.writes = cleanMap(obj.writes, WRITE_COUNT);
     if (Array.isArray(obj.stickers)) {
       var n = 0;
       obj.stickers.forEach(function (x) {
@@ -372,7 +456,7 @@
     }
     if (typeof obj.sound === 'boolean') s.sound = obj.sound;
     // 부모님 알림 코드(ntfy 토픽)
-    if (typeof obj.notify === 'string' && /^[A-Za-z0-9_-]{12,64}$/.test(obj.notify)) s.notify = obj.notify;
+    if (typeof obj.notify === 'string' && TOPIC_RE.test(obj.notify)) s.notify = obj.notify;
     s.session = sanitizeSession(obj.session);
     return s;
   }
@@ -403,7 +487,8 @@
     normalize: normalize, matchesAny: matchesAny, checkChoice: checkChoice, checkWrite: checkWrite,
     newCardState: newCardState, applyReview: applyReview, learnedIds: learnedIds,
     dueIds: dueIds, totalStars: totalStars, rankOf: rankOf, markKnown: markKnown,
-    recordAnswer: recordAnswer, learnCard: learnCard,
+    recordAnswer: recordAnswer, learnCard: learnCard, learnWrite: learnWrite, isRestDay: isRestDay, importFromSeven: importFromSeven,
+    addRetry: addRetry,
     startSession: startSession, advanceSession: advanceSession, activeSession: activeSession, endSession: endSession,
     timeLeft: timeLeft, closeExpiredMock: closeExpiredMock,
     doneToday: doneToday, reviewDoneToday: reviewDoneToday, canReview: canReview, allDone: allDone,

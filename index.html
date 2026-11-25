@@ -1,4 +1,4 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>장원급제 한자 7급</title>
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>장원급제 한자 6급</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&family=Noto+Serif+KR:wght@600;700&display=swap">
@@ -86,7 +86,7 @@ p { margin: 0; }
 .panel-head h2 { font-size: 1.35rem; }
 .panel-head span { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 .board { display: grid; gap: 14px; padding-bottom: 6px; }
-.cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 14px 6px; }
+.cells { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 6px; max-width: 560px; margin: 0 auto; width: 100%; }
 .daycol { display: grid; gap: 10px; justify-items: stretch; min-width: 0; }
 .daylbl { text-align: center; font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
 .cell.rev { border-color: var(--cheong-1); font-size: 0.75rem; }
@@ -95,6 +95,7 @@ p { margin: 0; }
 .cell.gift { border: 3px solid var(--hwang); background: var(--hwang-soft); }
 .cell.gift.ready { animation: glow 1.4s ease-in-out infinite; }
 .board-legend { font-size: 0.85rem; color: var(--ink-soft); }
+.board-more { text-align: center; font-family: var(--font-display); color: var(--ink-soft); background: var(--paper); border-radius: 12px; padding: 10px; }
 
 .prize-stage { background: var(--nam); color: var(--white); }
 .prize-stage h2 { font-size: 1.8rem; }
@@ -136,6 +137,7 @@ p { margin: 0; }
 @keyframes stick { 0% { transform: scale(2.4) rotate(-30deg); opacity: 0; } 100% { transform: scale(1) rotate(var(--r, 0deg)); opacity: 1; } }
 
 .tiles { display: grid; gap: 12px; }
+.tile-part { font-size: 1.15rem; color: var(--cheong-deep); margin-top: 4px; }
 .tile-group { display: grid; gap: 4px; }
 .tile-name { font-family: var(--font-display); color: var(--ink-soft); font-size: 0.95rem; }
 .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
@@ -351,9 +353,9 @@ p { margin: 0; }
 
   <section class="view" id="v-name" aria-label="이름 입력" hidden>
     <div class="intro">
-      <p class="eyebrow">장원급제 한자 7급</p>
+      <p class="eyebrow">장원급제 한자 6급</p>
       <h1>서당에 온 걸 환영해요!</h1>
-      <p>11월 20일까지 한자 150자를 익히고 11월 21일 한자능력검정시험 7급에 도전해요. 먼저 이름을 알려 주세요.</p>
+      <p>13주 동안 한자 300자를 익히고 2027년 2월 한자능력검정시험 6급에 도전해요. 먼저 이름을 알려 주세요.</p>
       <p class="warn" id="nameStorageWarn" hidden></p>
       <div class="warn" id="nameInAppWarn" hidden>
         <p>카카오톡 같은 앱 안에서 열면 기록이 지워질 수 있어요. Safari로 열어 주세요.</p>
@@ -394,7 +396,7 @@ p { margin: 0; }
     <div class="panel">
       <div class="panel-head"><h2>스티커판</h2><span id="boardCount"></span></div>
       <div class="board" id="board"></div>
-      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 11월 10일부터 50분 실전 시험(10·12·14일, 15~19일은 매일)! 합격하면 마지막 칸 🎁 선물 룰렛이 열려요.</p>
+      <p class="board-legend">위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습)예요. 일요일은 쉬는 날이에요. 2월 6일부터는 50분 실전 시험! 합격하면 마지막 칸 🎁 선물 룰렛이 열려요.</p>
     </div>
     <div class="panel">
       <div class="panel-head"><h2>한자 도감</h2><span id="dogamCount"></span></div>

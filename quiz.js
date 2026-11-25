@@ -1,9 +1,10 @@
-/* 장원급제 한자 7급: 문제와 하루 공부 만들기 (브라우저: window.Quiz, Node: module.exports) */
+/* 장원급제 한자 6급: 문제와 하루 공부 만들기 (브라우저: window.Quiz, Node: module.exports) */
 (function (root) {
   'use strict';
   var L = typeof module === 'object' && module.exports ? require('./logic.js') : root.Logic;
 
-  var MIN_NEW = 5;              // 새 한자 날 하루 최소 글자 수
+  var MIN_NEW = 3;              // 새 한자 날 하루 최소 글자 수
+  var DIAG_OLD = 30;            // 진단에서 다시 확인하는 7급 글자 수
   var CHUNK = 5;                // 새 글자는 다섯 자씩: 카드 → 고르기 → 쓰기 → 읽기
   var MIN_QUESTIONS = 10;
   var DAY_REVIEW_CAP = 15;      // 새 한자 날 첫 번째 공부의 복습 수
@@ -12,7 +13,7 @@
   var REVIEW_SESSION_MAX = 20;
   var TASTE = 5;                // 진단 날 아는 글자가 적으면 미리 맛보는 새 글자 수
   var LIGHT_SIZE = 15;          // 시험 전날 약한 글자 수
-  // 실제 시험 70문항 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2 · 필순 2
+  // 7급 실제 시험 70문항 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2 · 필순 2 (6급 90문항은 3단계에서)
   var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2, stroke: 2 };
   var ORDINALS = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
 
@@ -28,18 +29,20 @@
   function charOf(data, id) { return data.CHARS[id - 1]; }
   function hunOf(data, id) { var c = charOf(data, id); return c.h + ' ' + c.hun; }
   function wordsWith(data, id) { return data.WORDS.filter(function (w) { return w.c.indexOf(id) >= 0; }); }
-  // 그 글자가 든 한자어 하나: 두 글자 낱말을 먼저
+  // 그 글자가 든 한자어 하나: 두 글자 낱말을 먼저. 성으로만 쓰는 글자(李·朴)처럼 한자어가 없으면 undefined
   function wordFor(data, id, rng) {
     var all = wordsWith(data, id);
     var short = all.filter(function (w) { return w.c.length === 2; });
     var pool = short.length ? short : all;
-    return pool[Math.floor(rng() * pool.length)];
+    return pool.length ? pool[Math.floor(rng() * pool.length)] : undefined;
   }
   function starsOf(state, id) { return state.cards[id] ? state.cards[id].s : 0; }
+  function missOf(state, id) { return state.cards[id] ? state.cards[id].miss || 0 : 0; }
+  // 많이 틀린 글자 → 별이 낮은 글자 → 무작위 순서
   function weakestFirst(ids, state, rng) {
     return ids
-      .map(function (id) { return { id: id, s: starsOf(state, id), r: rng() }; })
-      .sort(function (a, b) { return (a.s - b.s) || (a.r - b.r); })
+      .map(function (id) { return { id: id, m: missOf(state, id), s: starsOf(state, id), r: rng() }; })
+      .sort(function (a, b) { return (b.m - a.m) || (a.s - b.s) || (a.r - b.r); })
       .map(function (x) { return x.id; });
   }
   function unknownIds(state, data) {
@@ -129,10 +132,17 @@
   }
   // 별이 많을수록 어려운 문제: 고르기 → 쓰기 → 한자어 읽기
   function reviewQuestion(state, id, data, rng, mode) {
-    var s = starsOf(state, id), c = charOf(data, id);
+    var s = starsOf(state, id), c = charOf(data, id), w = wordFor(data, id, rng);
     if (s <= 0) return makeHunPick(c, data, rng, mode);
-    if (s === 1 || (s >= 3 && rng() < 0.5)) return makeHunWrite(c, mode);
-    return makeDokWrite(wordFor(data, id, rng), id, data, mode);
+    if (s === 1 || !w || (s >= 3 && rng() < 0.5)) return makeHunWrite(c, mode);
+    return makeDokWrite(w, id, data, mode);
+  }
+  // 복습할 글자의 문제: 어제 틀린 글자(two)는 두 문제(훈음 쓰기 + 한자어 읽기), 그 밖에는 별에 맞는 한 문제
+  function reviewSteps(state, id, data, rng) {
+    var cs = state.cards[id], c = charOf(data, id);
+    if (!cs || !cs.two) return [reviewQuestion(state, id, data, rng, 'review')];
+    var w = wordFor(data, id, rng);
+    return [makeHunWrite(c, 'review'), w ? makeDokWrite(w, id, data, 'review') : makeHunPick(c, data, rng, 'review')];
   }
   function oppQuestions(n, data, rng, mode) {
     return shuffle(data.PAIRS, rng).slice(0, n).map(function (p) { return makeOpp(p, rng() < 0.5 ? 0 : 1, data, rng, mode); });
@@ -149,6 +159,7 @@
   // 오늘 할 공부: MOCK_FROM부터는 날짜로(실전 시험 날 · 그 사이 보강 · 시험 전날 가볍게),
   // 그 전에는 공부한 날 수로 계획을 따르되 실전·가볍게는 아직 하지 않고 유형 공부를 한다
   function dayType(state, today, data) {
+    if (L.isRestDay(today)) return 'rest';      // 일요일은 쉰다
     if (today >= data.MOCK_FROM) {
       if (data.MOCK_DAYS.indexOf(today) >= 0) return 'mock';
       return today >= L.addDays(data.EXAM_DATE, -1) ? 'light' : 'dok';
@@ -156,7 +167,7 @@
     var type = planType(L.studyDay(state, today), data);
     return type === 'mock' || type === 'light' ? 'dok' : type;
   }
-  // 오늘 새로 배울 글자 수: 모르는 글자를 남은 새 한자 날에 나눠서(최소 5자). 새 한자 날이 지나면 빠진 글자를 따라잡는다
+  // 오늘 새로 배울 글자 수: 모르는 글자를 남은 새 한자 날에 나눠서(최소 3자). 새 한자 날이 지나면 빠진 글자를 따라잡는다
   function newPerDay(state, day, data) {
     var unknown = unknownIds(state, data).length;
     var left = data.PLAN.slice(day - 1).filter(function (t) { return t === 'new'; }).length;
@@ -171,15 +182,18 @@
       part.forEach(function (id) { steps.push({ t: 'card', id: id }); });
       part.forEach(function (id) { steps.push(step(makeHunPick(charOf(data, id), data, rng, 'learn'))); });
       part.forEach(function (id) { steps.push(step(makeHunWrite(charOf(data, id), 'learn'))); });
-      part.forEach(function (id) { steps.push(step(makeDokWrite(wordFor(data, id, rng), id, data, 'learn'))); });
+      part.forEach(function (id) {
+        var w = wordFor(data, id, rng);
+        if (w) steps.push(step(makeDokWrite(w, id, data, 'learn')));
+      });
     }
     return steps;
   }
   function buildPractice(state, data, n, rng) {
     return weakestFirst(L.learnedIds(state), state, rng).slice(0, n).map(function (id) {
-      var r = rng(), c = charOf(data, id);
-      var q = r < 0.34 ? makeHunPick(c, data, rng, 'practice') : r < 0.67 ? makeHunWrite(c, 'practice')
-        : makeDokWrite(wordFor(data, id, rng), id, data, 'practice');
+      var r = rng(), c = charOf(data, id), w = wordFor(data, id, rng);
+      var q = r < 0.34 ? makeHunPick(c, data, rng, 'practice') : r < 0.67 || !w ? makeHunWrite(c, 'practice')
+        : makeDokWrite(w, id, data, 'practice');
       return step(q);
     });
   }
@@ -196,11 +210,14 @@
   }
   function buildDay(state, today, data, rng) {
     var day = L.studyDay(state, today), type = dayType(state, today, data);
+    if (type === 'rest') return { kind: 'rest', day: day, steps: [] };
     if (L.doneToday(state, today) || L.allDone(state)) {
       return { kind: 'daily', day: day, steps: buildPractice(state, data, MIN_QUESTIONS, rng) };
     }
+    // 실력 진단: 이미 배운 7급 글자 30자(약한 것부터)로 몸풀기, 이어서 아직 모르는 글자 모두(보통 6급 150자)
     if (type === 'diag') {
-      return { kind: 'diag', day: day, steps: unknownIds(state, data).map(function (id) {
+      var old = weakestFirst(L.learnedIds(state).filter(function (id) { return id < data.NEW_FROM_ID; }), state, rng).slice(0, DIAG_OLD);
+      return { kind: 'diag', day: day, steps: old.concat(unknownIds(state, data)).map(function (id) {
         return step(makeHunPick(charOf(data, id), data, rng, 'diag'));
       }) };
     }
@@ -216,7 +233,7 @@
     }
     L.dueIds(state, today, type === 'new' ? DAY_REVIEW_CAP : L.REVIEW_CAP).forEach(function (id) {
       used[id] = true;
-      steps.push(step(reviewQuestion(state, id, data, rng, 'review')));
+      reviewSteps(state, id, data, rng).forEach(function (q) { steps.push(step(q)); });
     });
     var fresh = unknownIds(state, data).slice(0, newPerDay(state, day, data));
     steps = steps.concat(learnSteps(fresh, data, rng));
@@ -228,7 +245,7 @@
       weakestFirst(L.learnedIds(state), state, rng).forEach(function (id) {
         if (reads >= DOK_DAY_READS) return;
         var w = wordFor(data, id, rng);
-        if (shown[w.w]) return;
+        if (!w || shown[w.w]) return;
         shown[w.w] = true; reads++;
         steps.push(step(makeDokWrite(w, id, data, 'practice')));
       });
@@ -254,7 +271,8 @@
     var todays = L.learnedIds(state).filter(function (id) { return state.cards[id].at === today; });
     shuffle(todays, rng).slice(0, REVIEW_SESSION_SIZE).forEach(function (id) { add(id, makeHunWrite(charOf(data, id), 'review')); });
     L.dueIds(state, today, L.REVIEW_CAP + REVIEW_SESSION_MAX).forEach(function (id) {
-      if (!used[id] && steps.length < REVIEW_SESSION_MAX) add(id, reviewQuestion(state, id, data, rng, 'review'));
+      if (used[id] || steps.length >= REVIEW_SESSION_MAX) return;
+      reviewSteps(state, id, data, rng).forEach(function (q) { add(id, q); });
     });
     if (steps.length < REVIEW_SESSION_SIZE) {
       var pool = L.learnedIds(state).filter(function (id) { return !used[id]; });
@@ -273,7 +291,7 @@
   var Quiz = {
     makeHunPick: makeHunPick, makeHunWrite: makeHunWrite, makeDokWrite: makeDokWrite,
     makeOpp: makeOpp, makeIdiom: makeIdiom, makeMean: makeMean, makeStroke: makeStroke, strokeQuestions: strokeQuestions,
-    reviewQuestion: reviewQuestion,
+    reviewQuestion: reviewQuestion, reviewSteps: reviewSteps,
     planType: planType, dayType: dayType, newPerDay: newPerDay, wordsWith: wordsWith,
     buildDay: buildDay, buildReview: buildReview, buildMock: buildMock, buildPractice: buildPractice
   };

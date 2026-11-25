@@ -1,10 +1,10 @@
-/* 장원급제 한자 7급: 화면 그리기, 소리, 입력, 저장 */
+/* 장원급제 한자 6급: 화면 그리기, 소리, 입력, 저장 */
 (function () {
   'use strict';
   var D = window.DATA, L = window.Logic, Q = window.Quiz, N = window.Notify;
-  var KEY = 'jangwon-hanja-v1';
-  var OLD_KEY = 'jangwon-sajaseongeo-v1';   // 사자성어 때 기록: 이름만 가져온다
-  var APP_VERSION = '11.12-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
+  var KEY = 'jangwon-hanja6-v1';
+  var SEVEN_KEY = 'jangwon-hanja-v1';   // 7급 기록: 이름·소리·알림 코드·150자 별을 가져오고 지우지 않는다
+  var APP_VERSION = '11.25-1';   // 아이패드가 최신 파일로 열렸는지 확인하는 표시 (홈 맨 아래)
   var CHAR = {}, GROUP = {}, WORD = {};
   D.CHARS.forEach(function (c) { CHAR[c.id] = c; });
   D.GROUPS.forEach(function (g) { GROUP[g.id] = g; });
@@ -64,15 +64,10 @@
   function parseState(raw) {
     try { return L.sanitize(JSON.parse(raw)); } catch (e) { return null; }
   }
-  // 한자 기록이 아직 없으면 사자성어 때 쓴 이름(과 소리 설정)만 가져온다
-  function fromOldApp() {
-    var s = L.emptyState();
-    try {
-      var old = JSON.parse(localStorage.getItem(OLD_KEY));
-      if (old && typeof old.name === 'string') s.name = old.name.slice(0, 8);
-      if (old && typeof old.sound === 'boolean') s.sound = old.sound;
-    } catch (e) { /* 예전 기록이 없거나 망가졌으면 처음부터 */ }
-    return s;
+  // 6급 기록이 아직 없으면 7급 기록에서 가져온다 (7급 기록은 그대로 둔다)
+  function fromSeven() {
+    try { return L.importFromSeven(JSON.parse(localStorage.getItem(SEVEN_KEY)), L.dateKey(new Date())); }
+    catch (e) { return L.emptyState(); }   // 7급 기록이 없거나 망가졌으면 처음부터
   }
   var importedName = false;
   function load() {
@@ -81,8 +76,8 @@
     if (!raw) {
       var copy = tabCopy(), fromTab = copy && parseState(copy);
       if (fromTab && fromTab.name) { recoveredFromTab = true; return fromTab; }
-      var fresh = fromOldApp();
-      importedName = !!fresh.name;
+      var fresh = fromSeven();
+      importedName = !!fresh.name || Object.keys(fresh.cards).length > 0;
       return fresh;
     }
     lastRaw = raw;
@@ -338,15 +333,24 @@
     writeOutbox(N.enqueue(readOutbox(), msg, Date.now()));
     flushOutbox();
   }
-  // 첫 번째·두 번째 공부, 진단, 실전 시험을 마치면: 누가, 무엇을, 몇 개 맞혔고, 몇 분 걸렸는지
+  // 진단에서 이미 안다고 확인된 6급 새 한자 수
+  function knownNew() {
+    return Object.keys(state.cards).filter(function (id) { return id >= D.NEW_FROM_ID && state.cards[id].k; }).length;
+  }
+  // 첫 번째·두 번째 공부, 진단, 실전 시험을 마치면: 누가, 무엇을, 몇 개 맞혔고, 몇 분 걸렸는지 (다시 풀기는 세지 않는다)
   function notifyFinish(sess, timedOut) {
     if (!sess) return;
-    var total = sess.steps.filter(isQ).length, now = Date.now();
+    var first = sess.steps.filter(function (s) { return s.t === 'q' && s.q.mode !== 'retry'; });
+    var total = first.length, now = Date.now(), right = sess.right;
     var solved = sess.steps.slice(0, sess.i).filter(isQ).length;
+    if (sess.kind === 'diag') {   // 진단은 6급 새 한자 중 아는 글자 수로 알린다
+      right = knownNew();
+      total = first.filter(function (s) { return s.q.id >= D.NEW_FROM_ID; }).length;
+    }
     notify(N.finishMessage({
-      name: state.name, kind: sess.kind, day: sess.day, right: sess.right, total: total,
+      name: state.name, kind: sess.kind, day: sess.day, right: right, total: total,
       minutes: sess.started ? (Math.min(now, sess.ends || now) - sess.started) / 60000 : null,
-      passed: sess.right >= L.passMark(total), timedOut: !!timedOut, unanswered: total - solved,
+      passed: right >= L.passMark(total), timedOut: !!timedOut, unanswered: total - solved,
       skipped: (sess.miss || []).filter(function (m) { return m.a === ''; }).length
     }));
   }
@@ -428,7 +432,7 @@
     $('inAppWarn').hidden = !IN_APP;
     var left = L.daysUntil(t, D.EXAM_DATE);
     $('dday').hidden = left < 0;
-    $('dday').textContent = left > 0 ? '한자 7급 시험까지 ' + left + '일' : '오늘이 시험 날! 힘내요';
+    $('dday').textContent = left > 0 ? '한자 6급 시험까지 ' + left + '일' : '오늘이 시험 날! 힘내요';
 
     renderStart(t);
     var learned = renderTiles();
@@ -440,6 +444,13 @@
   function renderStart(t) {
     var finished = L.allDone(state), done = L.doneToday(state, t), act = L.activeSession(state, t, Date.now());
     var review = L.canReview(state, t);
+    if (!act && !finished && Q.dayType(state, t, D) === 'rest') {
+      $('startBtn').hidden = true;
+      $('doneBanner').hidden = false;
+      $('doneMain').textContent = '오늘은 쉬는 날이에요';
+      $('doneSub').textContent = '일요일에는 푹 쉬어요. 더 하고 싶으면 아래 연습 문제를 풀어요.';
+      return;
+    }
     if (!act && (finished || (done && !review))) {
       $('startBtn').hidden = true;
       $('doneBanner').hidden = false;
@@ -457,13 +468,14 @@
     $('startBtn').hidden = false;
     $('doneBanner').hidden = true;
     if (act) {
-      var qTotal = act.steps.filter(isQ).length;
-      var qDone = act.steps.slice(0, act.i).filter(isQ).length;
+      var qTotal = act.steps.filter(isFirstTry).length;
+      var qDone = act.steps.slice(0, act.i).filter(isFirstTry).length;
       var cardsLeft = act.steps.slice(act.i).filter(isCard).length;
       $('startMain').textContent = act.kind === 'mock' ? '실전 시험 이어서 보기' : act.kind === 'diag' ? '실력 진단 이어서 하기'
         : act.kind === 'review' ? '두 번째 공부 이어서 하기' : '이어서 하기';
       $('startSub').textContent = cardsLeft
         ? '새 한자 ' + cardsLeft + '자 남았어요'
+        : qDone >= qTotal ? '틀린 문제 다시 풀기만 남았어요'
         : (act.ends ? '남은 시간 ' + clockText(L.timeLeft(state, Date.now())) + ' · ' : '') + '문제 ' + (qDone + 1) + ' / ' + qTotal + '부터';
       return;
     }
@@ -503,15 +515,18 @@
     $('startSub').textContent = parts.join(' · ');
   }
 
-  // 스티커판: 27일 × 2칸(한 줄에 일주일), 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부(복습). 마지막 날 아래 칸은 🎁 선물
+  // 스티커판: 공부일 80일 × 2칸(한 줄에 월~토 6일), 위 칸은 첫 번째 공부, 아래 칸은 두 번째 공부. 마지막 날 아래 칸은 🎁 선물.
+  // 실전 시험을 본 날은 📜 스티커가 붙는다
   var ROT = [-8, 6, -4, 9, -6, 5, -9];
   var justStuckKey = '';
   function renderBoard(t) {
     var board = $('board'), day = L.studyDay(state, t), done = L.doneToday(state, t), review = L.canReview(state, t);
     board.innerHTML = '';
     $('boardCount').textContent = state.stickers.length + ' / ' + (L.LAST_DAY * 2 - 1) + '칸';
+    // 80일을 다 그리면 너무 길어서, 지난 주·이번 주·다음 주까지만 보여 주고 나머지는 한 줄로 알린다
+    var shown = Math.min(L.LAST_DAY, Math.ceil(day / 6) * 6 + 6);
     var cells = el('div', 'cells');
-    for (var d = 1; d <= L.LAST_DAY; d++) {
+    for (var d = 1; d <= shown; d++) {
       var col = el('div', 'daycol');
       col.appendChild(el('span', 'daylbl', d + '일'));
       col.appendChild(cellFor(d, 'main', !done && d === day));
@@ -519,9 +534,10 @@
       cells.appendChild(col);
     }
     board.appendChild(cells);
+    if (shown < L.LAST_DAY) board.appendChild(el('p', 'board-more', '앞으로 ' + (L.LAST_DAY - shown) + '일 더 — 마지막 날 칸에는 🎁 선물이 있어요'));
     justStuckKey = '';
   }
-  var DAY_TAG = { diag: '진단', mock: '실전', light: '전날' };
+  var DAY_TAG = { diag: '진단' };
   function cellFor(d, kind, isToday) {
     var sticker = state.stickers.filter(function (s) { return (s.k === 'review') === (kind === 'review') && s.day === d; })[0];
     var type = Q.planType(d, D), tag = kind === 'main' && DAY_TAG[type];
@@ -555,35 +571,40 @@
     return c;
   }
 
-  // 한자 도감: 묶음마다 15칸
+  // 한자 도감: 6급 새 한자 묶음을 먼저, 그다음 7급까지 배운 한자. 묶음마다 15칸
   function renderTiles() {
-    var box = $('tiles'), learned = 0;
+    var box = $('tiles');
     box.innerHTML = '';
-    D.GROUPS.forEach(function (g) {
-      var sec = el('div', 'tile-group'), grid = el('div', 'tile-grid');
-      sec.appendChild(el('p', 'tile-name', g.name));
-      g.ids.forEach(function (id) {
-        var cs = state.cards[id], c = CHAR[id];
-        if (!cs) {
-          var lock = el('div', 'tile lock', '?');
-          lock.appendChild(el('span', 'st', ' '));
-          lock.setAttribute('aria-label', '아직 안 배운 한자');
-          grid.appendChild(lock);
-          return;
-        }
-        learned++;
-        var b = el('button', 'tile s' + cs.s, c.h);
-        b.type = 'button';
-        b.appendChild(el('span', 'st', starText(cs.s)));
-        b.setAttribute('aria-label', c.h + ' ' + c.hun + ', 별 ' + cs.s + '개, 카드 보기');
-        b.addEventListener('click', function () { showDogamCard(id); });
-        grid.appendChild(b);
-      });
-      sec.appendChild(grid);
-      box.appendChild(sec);
+    [['6급 새 한자', D.GROUPS.filter(function (g) { return g.ids[0] >= D.NEW_FROM_ID; })],
+      ['7급까지 배운 한자', D.GROUPS.filter(function (g) { return g.ids[0] < D.NEW_FROM_ID; })]].forEach(function (part) {
+      box.appendChild(el('h3', 'tile-part', part[0]));
+      part[1].forEach(function (g) { box.appendChild(tileGroup(g)); });
     });
+    var learned = Object.keys(state.cards).length;
     $('dogamCount').textContent = learned + ' / ' + D.CHARS.length + '자';
     return learned;
+  }
+  function tileGroup(g) {
+    var sec = el('div', 'tile-group'), grid = el('div', 'tile-grid');
+    sec.appendChild(el('p', 'tile-name', g.name));
+    g.ids.forEach(function (id) {
+      var cs = state.cards[id], c = CHAR[id];
+      if (!cs) {
+        var lock = el('div', 'tile lock', '?');
+        lock.appendChild(el('span', 'st', ' '));
+        lock.setAttribute('aria-label', '아직 안 배운 한자');
+        grid.appendChild(lock);
+        return;
+      }
+      var b = el('button', 'tile s' + cs.s, c.h);
+      b.type = 'button';
+      b.appendChild(el('span', 'st', starText(cs.s)));
+      b.setAttribute('aria-label', c.h + ' ' + c.hun + ', 별 ' + cs.s + '개, 카드 보기');
+      b.addEventListener('click', function () { showDogamCard(id); });
+      grid.appendChild(b);
+    });
+    sec.appendChild(grid);
+    return sec;
   }
 
   $('soundBtn').addEventListener('click', function () {
@@ -611,12 +632,17 @@
   // ---------- 공부 진행 ----------
   // 오늘의 공부·진단·실전 시험은 기록(state.session)에 진행 위치를 저장해서, 나갔다 와도 이어서 한다.
   // 연습 문제는 저장하지 않는다.
+  function isFirstTry(s) { return s.t === 'q' && s.q.mode !== 'retry'; }
+  function firstRetry(steps) {
+    for (var k = 0; k < steps.length; k++) if (steps[k].t === 'q' && steps[k].q.mode === 'retry') return k;
+    return null;
+  }
   function beginSession(saved) {
     if (!saved.steps.length) { toast('먼저 오늘의 공부로 한자를 배워 보세요.'); return; }
     S = {
       kind: saved.kind, steps: saved.steps, i: saved.i || 0, combo: 0, right: saved.right || 0,
-      qn: saved.steps.slice(0, saved.i || 0).filter(isQ).length,
-      total: saved.steps.filter(isQ).length,
+      qn: saved.steps.slice(0, saved.i || 0).filter(isFirstTry).length,
+      total: saved.steps.filter(isFirstTry).length, retryFrom: firstRetry(saved.steps),
       newCards: saved.newCards != null ? saved.newCards : saved.steps.filter(isCard).length,
       starsBefore: saved.starsBefore != null ? saved.starsBefore : L.totalStars(state),
       persist: saved.kind !== 'practice',
@@ -687,6 +713,14 @@
     if (S.ends && !correct) S.miss.push({ i: S.i, a: String(given == null ? '' : given) });
     setState(L.advanceSession(state, correct, given));
     if (S.i + 1 < S.steps.length) return;
+    // 원래 문제를 다 풀면 그날 틀린 문제를 한 번 더 (실전 시험·진단은 없음). 다 풀어야 오늘 공부를 마친 것으로 한다
+    var withRetry = L.addRetry(state);
+    if (withRetry !== state) {
+      setState(withRetry);
+      S.steps = state.session.steps;
+      S.retryFrom = S.i + 1;
+      return;
+    }
     var t = today(), sess = state.session;
     if (S.kind === 'mock') setState(L.endSession(L.recordMock(state, S.right, S.total, sess.d)));
     else if (S.kind === 'review') setState(L.endSession(L.finishReview(state, t)));
@@ -729,7 +763,7 @@
 
   // ---------- 카드 ----------
   var cardMode = 'learn';
-  var GRADE_NAME = { 8: '8급', 7.2: '7급Ⅱ', 7: '7급' };
+  var GRADE_NAME = { 8: '8급', 7.2: '7급Ⅱ', 7: '7급', 6.2: '6급Ⅱ', 6: '6급' };
   function partnersOf(id) {
     return D.PAIRS.filter(function (p) { return p.indexOf(id) >= 0; }).map(function (p) { return p[0] === id ? p[1] : p[0]; });
   }
@@ -800,17 +834,24 @@
 
   // ---------- 문제 ----------
   var TYPE_LABEL = { 'hun-pick': '훈음 고르기', 'hun-write': '훈음 쓰기', 'dok-write': '한자어 읽기', opp: '반대 한자', idiom: '성어 완성', mean: '뜻풀이', stroke: '필순' };
-  var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '실전 시험', diag: '실력 진단' };
+  var MODE_LABEL = { review: '복습', learn: '새 한자', practice: '연습', exam: '실전 시험', diag: '실력 진단', retry: '다시 풀기' };
   var HANJA_CHOICE = { opp: 1, idiom: 1, mean: 1 };
   var answered = false, copyMode = false, autoNext = null;
 
   function showQuestion(q) {
     clearTimeout(autoNext);
-    S.qn++;
+    if (q.mode !== 'retry') S.qn++;
     answered = false;
     copyMode = false;
-    $('qCount').textContent = '문제 ' + S.qn + ' / ' + S.total;
-    $('progressFill').style.width = Math.round((S.qn - 1) / S.total * 100) + '%';
+    if (q.mode === 'retry') {
+      var k = S.i - S.retryFrom + 1, m = S.steps.length - S.retryFrom;
+      if (k === 1) toast('틀린 문제를 한 번 더 풀어 봐요! 점수에는 들어가지 않아요.');
+      $('qCount').textContent = '다시 풀기 ' + k + ' / ' + m;
+      $('progressFill').style.width = Math.round((k - 1) / m * 100) + '%';
+    } else {
+      $('qCount').textContent = '문제 ' + S.qn + ' / ' + S.total;
+      $('progressFill').style.width = Math.round((S.qn - 1) / S.total * 100) + '%';
+    }
     $('qType').textContent = MODE_LABEL[q.mode] + ' · ' + TYPE_LABEL[q.type];
     if (q.type === 'stroke') {
       $('qText').innerHTML = strokeSvgHTML(q.show, q.n - 1, false, 'q-stroke');
@@ -956,6 +997,12 @@
     var before = state.cards[q.id] ? state.cards[q.id].s : null;
     setState(L.recordAnswer(state, q, correct, today()));
     var gained = before !== null && state.cards[q.id].s > before;
+    // 다시 풀기: 도장·별·연속 정답 없이 맞았는지와 정답만
+    if (q.mode === 'retry') {
+      if (correct) { sfx.pop(); setFeedback('ok', false, q.explain); } else setFeedback('no', false, wrongNote(q, chosenId));
+      stepDone(correct);
+      return;
+    }
     if (correct) {
       S.right++;
       S.combo++;
@@ -1054,8 +1101,8 @@
     $('resultTitle').textContent = S.timedOut ? '시간 끝! 채점했어요' : RESULT_TITLE[kind] || '연습 끝!';
     $('score').textContent = S.right + ' / ' + S.total;
     var gainedStars = L.totalStars(state) - S.starsBefore, gain = [];
-    var known = Object.keys(state.cards).filter(function (id) { return state.cards[id].k; }).length;
-    if (kind === 'diag') gain.push('아는 한자 ' + known + '자');
+    var known = knownNew(), unknown = D.CHARS.length - Object.keys(state.cards).length;
+    if (kind === 'diag') gain.push('아는 6급 한자 ' + known + '자');
     if (gainedStars > 0) gain.push('별 +' + gainedStars);
     if (S.newCards) gain.push('새 한자 ' + S.newCards + '자');
     $('resultGain').textContent = gain.join(' · ');
@@ -1063,8 +1110,8 @@
     var pm = L.passMark(S.total), passedNow = kind === 'mock' && S.right >= pm;
     var note = {
       practice: '연습 문제는 별과 스티커에 들어가지 않지만, 실력은 쑥쑥 늘어요.',
-      diag: '벌써 아는 한자가 ' + known + '자! 남은 ' + (D.CHARS.length - Object.keys(state.cards).length) +
-        '자는 내일부터 9일 동안 나눠서 배워요. ⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부도 해요!',
+      diag: '6급 한자 중 벌써 아는 글자가 ' + known + '자! 남은 ' + unknown +
+        '자는 내일부터 6주 동안 하루 3~5자씩 배워요. ⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부도 해요!',
       daily: L.allDone(state) ? L.LAST_DAY + '일 공부를 모두 마쳤어요! 시험도 장원급제예요!'
         : '⭐ 스티커가 붙었어요. 조금 쉬었다가 두 번째 공부(복습)도 해요!',
       review: '오늘 두 번째 칸에도 ⭐가 붙었어요. 마음에 드는 스티커로 바꿔 볼까요?',
@@ -1114,14 +1161,15 @@
 
   // ---------- 스티커 ----------
   var chosenSticker = null;
-  // 내일 할 공부 미리 알려 주기 (11/10부터는 날짜로 정해진다)
+  // 내일 할 공부 미리 알려 주기 (2/6부터는 날짜로 정해진다)
   function nextDayHint(day) {
     var tomorrow = L.addDays(today(), 1), next = Q.dayType(state, tomorrow, D);
     if (day >= L.LAST_DAY || tomorrow >= D.EXAM_DATE) return '';
+    if (next === 'rest') return ' 내일은 일요일, 쉬는 날이에요!';
     if (next === 'mock') return ' 내일은 ' + D.EXAM_MINUTES + '분 실전 시험이에요!';
     if (next === 'light') return ' 내일은 시험 전날, 가볍게만 해요.';
     if (next === 'dok' && tomorrow >= D.MOCK_FROM) return ' 내일은 틀린 한자를 보강하는 날이에요.';
-    if (next === 'dok' && Q.planType(day, D) === 'new') return ' 150자를 다 배웠어요! 다음 날부터는 한자어 읽기 집중이에요.';
+    if (next === 'dok' && Q.planType(day, D) === 'new') return ' 6급 새 한자를 다 배웠어요! 다음 날부터는 한자어 읽기 집중이에요.';
     return '';
   }
   function lastSticker() { return state.stickers[state.stickers.length - 1]; }
@@ -1244,7 +1292,7 @@
   function showHong(fresh) {
     var e = L.bestMock(state);
     if (!e || !L.passedMock(state)) return;
-    $('hongTitle').textContent = '한자 7급 실전 시험 ' + (L.examTitle(e.score, e.total) || '합격');
+    $('hongTitle').textContent = '한자 6급 실전 시험 ' + (L.examTitle(e.score, e.total) || '합격');
     $('hongName').textContent = state.name;
     $('hongScore').textContent = e.total + '문제 중 ' + e.score + '문제 정답 (합격 ' + L.passMark(e.total) + '문제)';
     $('hongDate').textContent = longDate(e.d);

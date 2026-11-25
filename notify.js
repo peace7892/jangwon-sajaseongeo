@@ -18,13 +18,16 @@
   }
   function join(parts) { return parts.filter(Boolean).join(' · '); }
 
-  // ev = { name, kind: 'daily'|'review'|'diag'|'mock', day, right, total, minutes, passed, skipped, timedOut, unanswered }
+  // ev = { name, kind: 'daily'|'review'|'write'|'diag'|'mock', day, right, total, minutes, passed, skipped, timedOut, unanswered }
   function finishMessage(ev) {
     var head, body;
     if (ev.kind === 'mock') {
       head = (ev.timedOut ? '⏰' : '📜') + ' 실전 시험 ' + ev.right + '/' + ev.total + ' ' + (ev.passed ? '합격' : '불합격');
       body = join([minutesText(ev.minutes), ev.skipped ? '넘긴 문제 ' + ev.skipped + '개' : '',
         ev.timedOut && ev.unanswered ? '시간이 끝나서 못 푼 문제 ' + ev.unanswered + '개' : '']);
+    } else if (ev.kind === 'write') {
+      head = '✍️ ' + ev.day + '일째 쓰기 공부 끝';
+      body = join([ev.right + '/' + ev.total + ' 맞음', minutesText(ev.minutes)]);
     } else if (ev.kind === 'diag') {
       head = '✅ 실력 진단 끝';
       body = join(['아는 한자 ' + ev.right + '자 (' + ev.total + '자 중)', minutesText(ev.minutes)]);
@@ -33,7 +36,7 @@
       body = join([ev.right + '/' + ev.total + ' 맞음', minutesText(ev.minutes)]);
     }
     var lines = [head, body];
-    if (ev.minutes != null && ev.total >= 5) {
+    if (ev.minutes != null && ev.total >= 5 && ev.kind !== 'diag') {   // 진단은 「잘 모르겠어요」로 빨리 넘겨도 괜찮다
       var avg = ev.minutes * 60 / ev.total;
       if (avg < FAST_SECONDS) lines.push('⚠️ 문제당 평균 ' + Math.max(1, Math.round(avg)) + '초 — 대충 넘겼을 수 있어요');
     }
