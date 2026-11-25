@@ -13,6 +13,10 @@
   var REVIEW_SESSION_MAX = 20;
   var TASTE = 5;                // 진단 날 아는 글자가 적으면 미리 맛보는 새 글자 수
   var LIGHT_SIZE = 15;          // 시험 전날 약한 글자 수
+  var TASTE_WRITES = 3;         // 1일째 쓰기 맛보기(따라 쓰기) 글자 수
+  var WRITE_REVIEW_NEW = 6;     // 새 한자 날 쓰기 복습 글자 수 (새 쓰기 글자 4~5자와 합쳐 10분쯤)
+  var WRITE_REVIEW_CAP = 8;     // 그 밖의 날 쓰기 복습 글자 수
+  var WORD_WRITES = 8;          // 한자어 쓰기 날의 문제 수 (복습 포함)
   // 7급 실제 시험 70문항 순서: 독음 32 · 훈음 30 · 반의어 2 · 완성형 2 · 뜻풀이 2 · 필순 2 (6급 90문항은 3단계에서)
   var MOCK = { dok: 32, hun: 30, opp: 2, idiom: 2, mean: 2, stroke: 2 };
   var ORDINALS = ['첫', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열'];
@@ -36,12 +40,13 @@
     var pool = short.length ? short : all;
     return pool.length ? pool[Math.floor(rng() * pool.length)] : undefined;
   }
-  function starsOf(state, id) { return state.cards[id] ? state.cards[id].s : 0; }
-  function missOf(state, id) { return state.cards[id] ? state.cards[id].miss || 0 : 0; }
-  // 많이 틀린 글자 → 별이 낮은 글자 → 무작위 순서
-  function weakestFirst(ids, state, rng) {
+  function recOf(state, id, which) { return (state[which === 'write' ? 'writes' : 'cards'] || {})[id]; }
+  function starsOf(state, id, which) { var c = recOf(state, id, which); return c ? c.s : 0; }
+  function missOf(state, id, which) { var c = recOf(state, id, which); return c ? c.miss || 0 : 0; }
+  // 많이 틀린 글자 → 별이 낮은 글자 → 무작위 순서 (which가 'write'면 쓰기 기록으로)
+  function weakestFirst(ids, state, rng, which) {
     return ids
-      .map(function (id) { return { id: id, m: missOf(state, id), s: starsOf(state, id), r: rng() }; })
+      .map(function (id) { return { id: id, m: missOf(state, id, which), s: starsOf(state, id, which), r: rng() }; })
       .sort(function (a, b) { return (b.m - a.m) || (a.s - b.s) || (a.r - b.r); })
       .map(function (x) { return x.id; });
   }
@@ -130,6 +135,44 @@
       return makeStroke(c, 1 + Math.floor(rng() * Math.min(10, c.strokes)), mode);
     });
   }
+  // ---------- 쓰기 문제 (화면에 직접 쓰고 획으로 채점) ----------
+  function isSelf(data, h) { return (data.WRITE_SELF || '').indexOf(h) >= 0; }
+  // 글자 하나 쓰기: 'trace' 흐린 글자 따라 쓰기(처음 배울 때) · 'hun' 훈음을 보고 쓰기
+  function makeWrite(c, kind, mode, data) {
+    data = data || root.DATA || (typeof module === 'object' && module.exports ? require('./data.js') : {});
+    var q = { id: c.id, type: kind === 'trace' ? 'write-trace' : 'write-hun', track: 'write', mode: mode,
+      ask: kind === 'trace' ? '흐린 글자 위에 한 획씩 따라 쓰세요' : '훈과 음에 맞는 한자를 쓰세요',
+      show: c.hun, chars: [c.h], answer: c.h, explain: charExplain(c) + '\n모두 ' + c.strokes + '획이에요.' };
+    if (isSelf(data, c.h)) q.self = true;
+    return q;
+  }
+  // 한자어 쓰기(시험 형식): 읽는 소리와 뜻을 보고 글자를 차례로 쓴다. id는 기록할 글자
+  function makeWriteWord(w, id, data, mode) {
+    var chars = w.c.map(function (cid) { return charOf(data, cid).h; });
+    var q = { id: id, type: 'write-word', track: 'write', mode: mode, ask: '한자어를 한자로 쓰세요', show: w.r, help: w.m,
+      chars: chars, answer: w.w,
+      explain: w.w + '(' + w.r + ') — ' + w.m + '\n' + w.c.map(function (cid) { return hunOf(data, cid); }).join(' · ') };
+    if (chars.some(function (h) { return isSelf(data, h); })) q.self = true;
+    return q;
+  }
+  function writableWord(w, data) { return w.c.every(function (cid) { return cid <= data.WRITE_MAX_ID; }); }
+  // 그 글자가 든, 쓰기 범위 글자로만 된 한자어 하나 (두 글자 낱말을 먼저)
+  function writeWordFor(data, id, rng, avoid) {
+    var all = wordsWith(data, id).filter(function (w) { return writableWord(w, data) && !(avoid && avoid[w.w]); });
+    var short = all.filter(function (w) { return w.c.length === 2; });
+    var pool = short.length ? short : all;
+    return pool.length ? pool[Math.floor(rng() * pool.length)] : undefined;
+  }
+  // 쓰기 복습: 어제 틀린 글자는 보고 쓰기 + 한자어 쓰기, 별 0~1은 보고 쓰기, 별 2~3은 한자어 쓰기
+  function writeReviewSteps(state, id, data, rng, shown) {
+    var cs = state.writes[id], c = charOf(data, id), w = writeWordFor(data, id, rng, shown);
+    if (w) shown[w.w] = true;
+    if (cs.two) return w ? [makeWrite(c, 'hun', 'review', data), makeWriteWord(w, id, data, 'review')]
+      : [makeWrite(c, 'hun', 'review', data)];
+    if (cs.s <= 1 || !w) return [makeWrite(c, 'hun', 'review', data)];
+    return [makeWriteWord(w, id, data, 'review')];
+  }
+
   // 별이 많을수록 어려운 문제: 고르기 → 쓰기 → 한자어 읽기
   function reviewQuestion(state, id, data, rng, mode) {
     var s = starsOf(state, id), c = charOf(data, id), w = wordFor(data, id, rng);
@@ -288,10 +331,52 @@
     return { kind: 'review', day: day, steps: steps };
   }
 
+  // 하루 두 번째 공부: 한자 쓰기 (쓰기 범위 = 7급까지 150자)
+  //  1일째: 따라 쓰기 3자로 맛보기 · 새 한자 날(2~37일째): 쓰기 복습 + 새 쓰기 글자(따라 쓰기 → 보고 쓰기)
+  //  그 뒤: 쓰기 복습 + 한자어 쓰기(시험 형식)로 8문제 · 일요일과 시험 전날은 없음
+  function writeIds(data) { return data.CHARS.filter(function (c) { return c.id <= data.WRITE_MAX_ID; }).map(function (c) { return c.id; }); }
+  function newWritesPerDay(state, day, data) {
+    var unknown = writeIds(data).filter(function (id) { return !(state.writes || {})[id]; }).length;
+    if (planType(day, data) !== 'new') return Math.min(unknown, MIN_NEW);   // 새 한자 날이 지나면 하루 3자씩 따라잡기
+    var left = data.PLAN.slice(day - 1).filter(function (t) { return t === 'new'; }).length;
+    if (left <= 1) return unknown;
+    return Math.min(unknown, Math.max(MIN_NEW, Math.ceil(unknown / left)));
+  }
+  function buildWriting(state, today, data, rng) {
+    var day = L.studyDay(state, today), type = dayType(state, today, data), steps = [], used = {}, shown = {};
+    var out = { kind: 'write', day: day, steps: steps };
+    if (type === 'rest' || type === 'light') return out;
+    function add(q) { steps.push(step(q)); }
+    if (type === 'diag') {
+      var easy = writeIds(data).filter(function (id) { return !isSelf(data, charOf(data, id).h); });
+      shuffle(easy.slice(0, 50), rng).slice(0, TASTE_WRITES).forEach(function (id) { add(makeWrite(charOf(data, id), 'trace', 'practice', data)); });
+      return out;
+    }
+    state = Object.assign({}, state, { writes: state.writes || {} });
+    L.dueIds(state, today, type === 'new' ? WRITE_REVIEW_NEW : WRITE_REVIEW_CAP, 'write').forEach(function (id) {
+      used[id] = true;
+      writeReviewSteps(state, id, data, rng, shown).forEach(add);
+    });
+    var fresh = writeIds(data).filter(function (id) { return !state.writes[id]; }).slice(0, newWritesPerDay(state, day, data));
+    fresh.forEach(function (id) { used[id] = true; add(makeWrite(charOf(data, id), 'trace', 'learn', data)); });
+    fresh.forEach(function (id) { add(makeWrite(charOf(data, id), 'hun', 'learn', data)); });
+    if (type !== 'new') {
+      var pool = weakestFirst(writeIds(data).filter(function (id) { return !used[id] && state.writes[id]; }), state, rng, 'write');
+      for (var i = 0; i < pool.length && steps.length < WORD_WRITES; i++) {
+        var w = writeWordFor(data, pool[i], rng, shown);
+        if (!w) continue;
+        shown[w.w] = true;
+        add(makeWriteWord(w, pool[i], data, 'practice'));
+      }
+    }
+    return out;
+  }
+
   var Quiz = {
     makeHunPick: makeHunPick, makeHunWrite: makeHunWrite, makeDokWrite: makeDokWrite,
     makeOpp: makeOpp, makeIdiom: makeIdiom, makeMean: makeMean, makeStroke: makeStroke, strokeQuestions: strokeQuestions,
     reviewQuestion: reviewQuestion, reviewSteps: reviewSteps,
+    makeWrite: makeWrite, makeWriteWord: makeWriteWord, buildWriting: buildWriting,
     planType: planType, dayType: dayType, newPerDay: newPerDay, wordsWith: wordsWith,
     buildDay: buildDay, buildReview: buildReview, buildMock: buildMock, buildPractice: buildPractice
   };

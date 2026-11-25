@@ -1190,8 +1190,12 @@
     '2027-02-20', '2027-02-22', '2027-02-23', '2027-02-24', '2027-02-25'];
   var EXAM_MINUTES = 50;
 
-  // 필순 문제에 쓰는 글자: 우리(어문회)와 중국 필순이 같은 글자만 (획 모양은 strokes.js). 右는 우리 순서로 바꿔 넣었다
-  var STROKE_ORDER = '四五六七九十百千日月水木土山川江天林上下左右中外方父兄子女夫寸名午夕文字王主市村工安休手口心力自立大小白少正平不';
+  // 필순 문제와 쓰기 채점에 쓰는 글자: 어문회 「5급 500자 필순」 그림과 한 획씩 대조해 확인한 145자
+  // (획 모양은 strokes.js, 대조 결과는 scripts/stroke-check-6.json)
+  var STROKE_ORDER = '一二三四五六七八九十百千萬數算日月火水木金土山川江海天地林然東西南北上下左右中內外前後方間父母兄弟子女男人夫孝寸老姓名春夏秋冬年時午夕每世先來植校學生文字語話問答記歌紙室漢國韓民王軍主市邑里村洞場門旗家住食物車電工農便所空氣安全休手足口面心力自命育活色立出入登大小長白靑少重正直平不同有事動';
+  // 쓰기를 앱이 채점하지 못하고 아이가 정답과 겹쳐 보고 스스로 확인하는 글자:
+  // 敎는 획 데이터가 없고, 祖·花·草·道는 데이터의 획 수가 공식(礻 5획 示, 艹 4획, 辶 4획)과 달라서
+  var WRITE_SELF = '敎祖花草道';
 
   // 별 합계 기준 (읽기 300자 × 3 + 쓰기 150자 × 3 = 최대 1350)
   var RANKS = [
@@ -1217,7 +1221,7 @@
   var PRIZES = ['소원권', '용돈 5천 원', '좋아하는 간식', '게임·영상 30분', '저녁 메뉴 고르기'];
 
   var DATA = { NEW_FROM_ID: NEW_FROM_ID, WRITE_MAX_ID: WRITE_MAX_ID, WORD_EXEMPT: WORD_EXEMPT, CHARS: CHARS, GROUPS: GROUPS, WORDS: WORDS, READING_EXCEPTIONS: READING_EXCEPTIONS, PAIRS: PAIRS, IDIOMS: IDIOMS,
-    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, MOCK_DAYS: MOCK_DAYS, EXAM_MINUTES: EXAM_MINUTES, STROKE_ORDER: STROKE_ORDER, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
+    PLAN: PLAN, EXAM_DATE: EXAM_DATE, MOCK_FROM: MOCK_FROM, MOCK_DAYS: MOCK_DAYS, EXAM_MINUTES: EXAM_MINUTES, STROKE_ORDER: STROKE_ORDER, WRITE_SELF: WRITE_SELF, RANKS: RANKS, STICKERS: STICKERS, PRIZES: PRIZES, PARENT_PIN_HASH: PARENT_PIN_HASH };
   if (typeof module === 'object' && module.exports) module.exports = DATA;
   else root.DATA = DATA;
 })(this);

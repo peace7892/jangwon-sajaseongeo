@@ -385,7 +385,7 @@
     var q = st.t === 'q' && st.q;
     if (!q || !validId(q.id) || !TYPES[q.type] || !MODES[q.mode]) return false;
     if (typeof q.show !== 'string' || typeof q.answer !== 'string') return false;
-    if (/^write-/.test(q.type)) return true;          // 쓰기 문제는 화면에서 획으로 채점한다
+    if (/^write-/.test(q.type)) return strs(q.chars);  // 쓰기 문제는 화면에서 획으로 채점한다(쓸 글자만 있으면 된다)
     if (q.choices === undefined) return strs(q.answers);
     return Array.isArray(q.choices) && q.choices.length >= 2 && isNum(q.key, 1, 1000) &&
       q.choices.every(function (c) { return c && isNum(c.id, 1, 1000) && typeof c.text === 'string'; });
